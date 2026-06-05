@@ -7,7 +7,7 @@ from google import genai
 
 # Kalitlarni toʻgʻridan-toʻgʻri matn koʻrinishida yozamiz
 BOT_TOKEN = "8799568905:AAGY-PYkbve9LkNp2Fy922FAibTopmomu5s"
-GEMINI_API_KEY = "AQ.Ab8RN6I_DYtwmqe-rC_8o-69H_bzWhmejGFoHPb0_zYl67HYcQ"
+GEMINI_API_KEY = "AQ.Ab8RN6JQdzPdXyx-gMJUsGi1maHpzrDW-3yMVV4laymtOibxJw"
 WEBHOOK_URL = "https://my-gemini-bot-1-14qh.onrender.com"
 
 # Server sozlamalari
