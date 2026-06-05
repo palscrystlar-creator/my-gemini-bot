@@ -3,11 +3,11 @@ import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
 from aiohttp import web
-from google import genai
+from groq import Groq
 
-# Kalitlarni toʻgʻridan-toʻgʻri matn koʻrinishida yozamiz
+# Kalitlarni joylashtiramiz
 BOT_TOKEN = "8799568905:AAGY-PYkbve9LkNp2Fy922FAibTopmomu5s"
-GEMINI_API_KEY = "AQ.Ab8RN6J21_-vR1_11pqXZ6lgpUjhfXqZ6bFJZ-CuLowpBKunUA"
+GROQ_API_KEY = "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"
 WEBHOOK_URL = "https://my-gemini-bot-1-14qh.onrender.com"
 
 # Server sozlamalari
@@ -15,26 +15,30 @@ PORT = int(os.environ.get("PORT", 8080))
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
-ai_client = genai.Client(api_key=GEMINI_API_KEY)
+ai_client = Groq(api_key=GROQ_API_KEY)
 
 @dp.message(CommandStart())
 async def start_command(message: types.Message):
-    await message.answer(f"Salom {message.from_user.full_name}! 👋 Men VPN-siz, serverda ishlayapman!")
+    await message.answer(f"Salom {message.from_user.full_name}! 👋 Men yangi va kuchli AI serverida ishlayapman!")
 
 @dp.message()
 async def chat_with_ai(message: types.Message):
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
     try:
-        response = ai_client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=message.text,
+        # Llama 3 modelidan foydalanamiz (Gemini muqobili)
+        chat_completion = ai_client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": message.text,
+                }
+            ],
+            model="llama-3.3-70b-specdec",
         )
-        await message.answer(response.text)
+        await message.answer(chat_completion.choices[0].message.content)
     except Exception as e:
-        # Xatolik sababini yashirmasdan, Telegram'ga chiqarib beradi
-        await message.answer(f"Google xatoligi: {str(e)}")
+        await message.answer(f"Xatolik yuz berdi: {str(e)}")
 
-# Telegram'dan keladigan xabarlarni qabul qiluvchi funksiya
 async def handle_webhook(request):
     url = str(request.url)
     index = url.rfind("/webhook")
@@ -44,7 +48,6 @@ async def handle_webhook(request):
         await dp.feed_update(bot, update)
     return web.Response(text="OK")
 
-# Server ishga tushganda webhookni o'rnatish
 async def on_startup(app):
     await bot.set_webhook(f"{WEBHOOK_URL}/webhook")
 
