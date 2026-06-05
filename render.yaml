@@ -1,6 +1,0 @@
-services:
-  - type: web
-    name: my-gemini-bot
-    runtime: python
-    buildCommand: pip install --upgrade pip && pip install aiogram aiohttp aiohttp-socks google-genai
-    startCommand: python bot1.py
