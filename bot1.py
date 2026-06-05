@@ -31,7 +31,8 @@ async def chat_with_ai(message: types.Message):
         )
         await message.answer(response.text)
     except Exception as e:
-        await message.answer("Xatolik yuz berdi.")
+        # Xatolik sababini yashirmasdan, Telegram'ga chiqarib beradi
+        await message.answer(f"Google xatoligi: {str(e)}")
 
 # Telegram'dan keladigan xabarlarni qabul qiluvchi funksiya
 async def handle_webhook(request):
