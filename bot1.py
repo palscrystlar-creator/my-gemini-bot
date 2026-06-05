@@ -25,7 +25,7 @@ async def start_command(message: types.Message):
 async def chat_with_ai(message: types.Message):
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
     try:
-        # Llama 3 modelidan foydalanamiz (Gemini muqobili)
+        # Model nomini yangisiga almashtirdik:
         chat_completion = ai_client.chat.completions.create(
             messages=[
                 {
@@ -33,7 +33,7 @@ async def chat_with_ai(message: types.Message):
                     "content": message.text,
                 }
             ],
-            model="llama-3.3-70b-versatile"
+            model="llama-3.3-70b-versatile",  # Model nomi yangilandi
         )
         await message.answer(chat_completion.choices[0].message.content)
     except Exception as e:
