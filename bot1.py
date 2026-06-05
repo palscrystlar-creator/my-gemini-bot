@@ -33,7 +33,7 @@ async def chat_with_ai(message: types.Message):
                     "content": message.text,
                 }
             ],
-            model="llama-3.3-70b-specdec",
+            model="llama-3.3-70b-versatile"
         )
         await message.answer(chat_completion.choices[0].message.content)
     except Exception as e:
