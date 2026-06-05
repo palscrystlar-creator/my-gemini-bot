@@ -25,13 +25,17 @@ async def start_command(message: types.Message):
 async def chat_with_ai(message: types.Message):
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
     try:
-        # Llama 3 modelidan foydalanamiz
         chat_completion = ai_client.chat.completions.create(
             messages=[
-                # Botga tillarni avtomatik aniqlash buyrug'ini berdik:
+                # Botning ismi va qat'iy qoidalari:
                 {
                     "role": "system",
-                    "content": "Siz aqlli va ko'p tilli Telegram botiz. Foydalanuvchi qaysi tilda murojaat qilsa, FAQAT o'sha tilning o'zida javob qaytaring. Boshqa tillardagi tarjimalarni yoki izohlarni matnga qo'shmang. Matn toza va faqat bitta tilda bo'lsin."
+                    "content": (
+                        "You are a helpful AI assistant. Your name is 'ShavkatoV AI' (or your channel name). "
+                        "STRICT RULE: Detect the language of the user's message. Respond ONLY in that exact same language. "
+                        "If user speaks English, reply in pure English. If Uzbek, reply in pure Uzbek. "
+                        "Do not mix languages and do not translate your response."
+                    )
                 },
                 {
                     "role": "user",
@@ -43,7 +47,6 @@ async def chat_with_ai(message: types.Message):
         await message.answer(chat_completion.choices[0].message.content)
     except Exception as e:
         await message.answer(f"Xatolik yuz berdi: {str(e)}")
-
 async def handle_webhook(request):
     url = str(request.url)
     index = url.rfind("/webhook")
