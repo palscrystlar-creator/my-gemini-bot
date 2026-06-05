@@ -25,15 +25,20 @@ async def start_command(message: types.Message):
 async def chat_with_ai(message: types.Message):
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
     try:
-        # Model nomini yangisiga almashtirdik:
+        # Llama 3 modelidan foydalanamiz
         chat_completion = ai_client.chat.completions.create(
             messages=[
+                # Mana shu yerga botga o'zbekcha gapirish buyrug'ini qo'shdik:
+                {
+                    "role": "system",
+                    "content": "Siz aqlli va muloyim Telegram botiz. Foydalanuvchi bilan FAQAT va FAQAT sof o'zbek tilida gaplashing. Inglizcha tarjimalar yoki izohlar yozmang."
+                },
                 {
                     "role": "user",
                     "content": message.text,
                 }
             ],
-            model="llama-3.3-70b-versatile",  # Model nomi yangilandi
+            model="llama-3.3-70b-versatile",
         )
         await message.answer(chat_completion.choices[0].message.content)
     except Exception as e:
