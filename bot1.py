@@ -3,12 +3,13 @@ import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
 from aiohttp import web
+import os
 from google import genai
 
-# Kalitlarni kod ichidan o'chirib, xavfsiz tizimga bog'laymiz
-BOT_TOKEN = os.environ.get("8799568905:AAGY-PYkbve9LkNp2Fy922FAibTopmomu5s")
-GEMINI_API_KEY = os.environ.get("AQ.Ab8RN6I_DYtwmqe-rC_8o-69H_bzWhmejGFoHPb0_zYl67HYcQ")
-WEBHOOK_URL = os.environ.get("AQ.Ab8RN6I_DYtwmqe-rC_8o-69H_bzWhmejGFoHPb0_zYl67HYcQ")
+# Kalitlarni toʻgʻridan-toʻgʻri matn koʻrinishida yozamiz
+BOT_TOKEN = "8799568905:AAGY-PYkbve9LkNp2Fy922FAibTopmomu5s"
+GEMINI_API_KEY = "AQ.Ab8RN6I_DYtwmqe-rC_8o-69H_bzWhmejGFoHPb0_zYl67HYcQ"
+WEBHOOK_URL = "https://my-gemini-bot-1-14qh.onrender.com"
 
 # Server sozlamalari
 PORT = int(os.environ.get("PORT", 8080))
@@ -16,8 +17,6 @@ PORT = int(os.environ.get("PORT", 8080))
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
-
-# ... qolgan hamma kod o'z holaticha o'zgarishsiz qoladi ...
 
 @dp.message(CommandStart())
 async def start_command(message: types.Message):
