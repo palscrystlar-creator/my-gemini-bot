@@ -6,9 +6,9 @@ from aiohttp import web
 from google import genai
 
 # Kalitlarni kod ichidan o'chirib, xavfsiz tizimga bog'laymiz
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
+BOT_TOKEN = os.environ.get("8799568905:AAGY-PYkbve9LkNp2Fy922FAibTopmomu5s")
+GEMINI_API_KEY = os.environ.get("AQ.Ab8RN6I_DYtwmqe-rC_8o-69H_bzWhmejGFoHPb0_zYl67HYcQ")
+WEBHOOK_URL = os.environ.get("AQ.Ab8RN6I_DYtwmqe-rC_8o-69H_bzWhmejGFoHPb0_zYl67HYcQ")
 
 # Server sozlamalari
 PORT = int(os.environ.get("PORT", 8080))
