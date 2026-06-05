@@ -28,10 +28,10 @@ async def chat_with_ai(message: types.Message):
         # Llama 3 modelidan foydalanamiz
         chat_completion = ai_client.chat.completions.create(
             messages=[
-                # Mana shu yerga botga o'zbekcha gapirish buyrug'ini qo'shdik:
+                # Botga tillarni avtomatik aniqlash buyrug'ini berdik:
                 {
                     "role": "system",
-                    "content": "Siz aqlli va muloyim Telegram botiz. Foydalanuvchi bilan FAQAT va FAQAT sof o'zbek tilida gaplashing. Inglizcha tarjimalar yoki izohlar yozmang."
+                    "content": "Siz aqlli va ko'p tilli Telegram botiz. Foydalanuvchi qaysi tilda murojaat qilsa, FAQAT o'sha tilning o'zida javob qaytaring. Boshqa tillardagi tarjimalarni yoki izohlarni matnga qo'shmang. Matn toza va faqat bitta tilda bo'lsin."
                 },
                 {
                     "role": "user",
