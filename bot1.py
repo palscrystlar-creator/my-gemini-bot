@@ -3,7 +3,6 @@ import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
 from aiohttp import web
-import os
 from google import genai
 
 # Kalitlarni toʻgʻridan-toʻgʻri matn koʻrinishida yozamiz
