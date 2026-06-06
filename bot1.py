@@ -60,15 +60,24 @@ STRICT RULES TO AVOID REPETITION & ROBOTIC BEHAVIOR:
 """
 
 # ==================== 3. GROQ VA AUDIO API FUNKSIYALARI ====================
-
 async def groq_chat_completion(messages, model="llama-3.3-70b-versatile"):
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-    payload = {"model": model, "messages": messages}
+    
+    # TEMPERATURE 0.85 - AI ga xilma-xillik va kreativlik beradi
+    # Agar 0.7 dan past bo'lsa, AI juda "zerikarli" va bir xil gapiradi.
+    payload = {
+        "model": model, 
+        "messages": messages,
+        "temperature": 0.85, 
+        "max_tokens": 300,
+        "frequency_penalty": 0.5, # Muhim: AI bir xil so'zlarni takrorlashini kamaytiradi
+        "presence_penalty": 0.5   # Muhim: AI yangi mavzularga o'tishga majbur bo'ladi
+    }
+    
     async with ClientSession() as session:
         async with session.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload) as resp:
             result = await resp.json()
             return result["choices"][0]["message"]["content"]
-
 async def groq_transcribe_audio(file_path):
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
     data = web.FormData()
