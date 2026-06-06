@@ -95,7 +95,7 @@ async def start_ielts_mock(message: types.Message, state: FSMContext):
     except Exception as e:
         await message.answer(f"Xatolik: {str(e)}")
 
-# --- Yordamchi funksiya: Ovozni matnga o'girish ---
+# Uni quyidagiga almashtiring:
 async def transcribe_voice(message: types.Message) -> str:
     voice_id = message.voice.file_id
     file = await bot.get_file(voice_id)
@@ -105,11 +105,12 @@ async def transcribe_voice(message: types.Message) -> str:
     try:
         with open(local_voice_path, "rb") as audio_file:
             transcription = ai_client.audio.transcriptions.create(
-                file=(local_voice_path, audio_file.read()),
+                file=(local_voice_path, audio_file.read()), # Fayl nomi va binar ma'lumot
                 model="whisper-large-v3",
             )
         return transcription.text
-    except:
+    except Exception as e:
+        print(f"Transkripsiya xatosi: {e}") # Konsolda ko'rinadi
         return ""
     finally:
         if os.path.exists(local_voice_path): os.remove(local_voice_path)
