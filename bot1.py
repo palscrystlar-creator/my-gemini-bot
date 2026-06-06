@@ -345,18 +345,14 @@ async def p3_q3_handler(message: types.Message, state: FSMContext):
 # --- STANDART REJIM (MATNLI CHAT) ---
 @dp.message(F.text)
 async def chat_with_ai(message: types.Message):
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    try:
-        chat_completion = ai_client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": message.text}
-            ],
-            model="llama-3.3-70b-versatile",
-        )
-        await message.answer(chat_completion.choices[0].message.content)
-    except Exception as e:
-        await message.answer(f"Xatolik yuz berdi: {str(e)}")
+    # Bu yerda history ishlatilmayapti!
+    chat_completion = ai_client.chat.completions.create(
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": message.text} # Faqat oxirgi xabarni beryapti
+        ],
+        ...
+    )
 
 # --- STANDART REJIM (OVOZLI CHAT) ---
 @dp.message(F.voice)
