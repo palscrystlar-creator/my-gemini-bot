@@ -343,30 +343,37 @@ async def p3_q3_handler(message: types.Message, state: FSMContext):
         await message.answer(f"Hisobotda xatolik: {str(e)}")
     finally:
         await state.clear()
-# 1. Global o'zgaruvchi (yoki bazadan olib) foydalanuvchilar tarixini saqlash
-user_histories = {} 
-
-@dp.message(F.text)
+        #start bosganda barcha yozganlarimiz esda qoladi
+@dp.message(F.text & ~Command(commands=["start", "mock_ielts"]))
 async def chat_with_ai(message: types.Message):
     user_id = message.from_user.id
+    
+    # Agar foydalanuvchi birinchi marta yozayotgan bo'lsa, tarixni boshlaymiz
     if user_id not in user_histories:
         user_histories[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
     
-    # Yangi xabarni tarixga qo'shamiz
+    # Foydalanuvchi xabarini tarixga qo'shamiz
     user_histories[user_id].append({"role": "user", "content": message.text})
     
-    # Tarix bilan birga so'rov yuboramiz
-    chat_completion = ai_client.chat.completions.create(
-        messages=user_histories[user_id],
-        model="llama-3.3-70b-versatile",
-    )
+    # Tarix juda uzayib ketmasligi uchun (masalan oxirgi 10 ta xabar)
+    if len(user_histories[user_id]) > 11:
+        user_histories[user_id] = [user_histories[user_id][0]] + user_histories[user_id][-10:]
+
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
     
-    ai_response = chat_completion.choices[0].message.content
-    
-    # AI javobini ham tarixga qo'shamiz
-    user_histories[user_id].append({"role": "assistant", "content": ai_response})
-    
-    await message.answer(ai_response)
+    try:
+        chat_completion = ai_client.chat.completions.create(
+            messages=user_histories[user_id],
+            model="llama-3.3-70b-versatile",
+        )
+        ai_response = chat_completion.choices[0].message.content
+        
+        # AI javobini ham tarixga qo'shamiz
+        user_histories[user_id].append({"role": "assistant", "content": ai_response})
+        
+        await message.answer(ai_response)
+    except Exception as e:
+        await message.answer(f"Xatolik: {str(e)}")
 
 # --- STANDART REJIM (OVOZLI CHAT) ---
 @dp.message(F.voice)
