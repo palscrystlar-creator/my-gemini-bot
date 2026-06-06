@@ -235,7 +235,6 @@ async def p3_q2_handler(message: types.Message, state: FSMContext):
     await state.update_data(p3_q3=p3_q3, history=history)
     await state.set_state(IELTSMockState.part3_q3)
 
-# ==================== MUKAMMAL OVOZLI MOCK HISOBOT QISMI ====================
 @dp.message(IELTSMockState.part3_q3, F.voice)
 async def p3_q3_handler(message: types.Message, state: FSMContext):
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
@@ -250,7 +249,6 @@ async def p3_q3_handler(message: types.Message, state: FSMContext):
     history.append({"role": "candidate", "content": text})
     
     try:
-        # AI dan hisobotni maxsus qismlarga bo'lingan formatda so'raymiz
         report_prompt = (
             f"Analyze this IELTS interview: {history}\n\n"
             f"Generate a detailed report in Uzbek. You MUST strictly separate the sections using '---' divider. "
@@ -275,7 +273,6 @@ async def p3_q3_handler(message: types.Message, state: FSMContext):
         )
         report_content = completion.choices[0].message.content
         
-        # Hisobotni bo'limlarga ajratib, har biriga alohida ovoz beramiz
         sections = report_content.split("---")
         
         await message.answer("📊 <b>SIZNING TO'LIQ IELTS MOCK HISOBOTINGIZ:</b>\n\n(Har bir bo'lim matni ostida uning o'zbekcha ovozli audiosi ham taqdim etiladi 👇)")
@@ -283,18 +280,15 @@ async def p3_q3_handler(message: types.Message, state: FSMContext):
         for index, section in enumerate(sections):
             clean_section = section.strip()
             if clean_section:
-                # Foydalanuvchiga matnni yuboramiz
                 await message.answer(clean_section)
                 
-                # Ovozli fayl yaratamiz (O'zbekcha Madina ovozi)
                 voice_path = f"report_part_{index}_{message.chat.id}.mp3"
                 communicate = edge_tts.Communicate(clean_section.replace("**", "").replace("*", ""), "uz-UZ-MadinaNeural")
                 await communicate.save(voice_path)
                 
-                # Ovozni yuboramiz
                 await message.answer_voice(types.FSInputFile(voice_path))
                 if os.path.exists(voice_path): os.remove(voice_path)
-                await asyncio.sleep(1) # Server qizib ketmasligi uchun qisqa pauza
+                await asyncio.sleep(1)
                 
     except Exception as e:
         await message.answer(f"Hisobotda xatolik: {str(e)}")
@@ -336,6 +330,8 @@ async def handle_normal_voice(message: types.Message):
     except Exception as e:
         await message.answer(f"Xatolik: {str(e)}")
 
+# ==================== WEBHOOK VA ISHGA TUSHIRISH (MENYU SHU YERDA) ====================
+
 async def handle_webhook(request):
     url = str(request.url)
     index = url.rfind("/webhook")
@@ -346,7 +342,15 @@ async def handle_webhook(request):
     return web.Response(text="OK")
 
 async def on_startup(app):
+    # Webhook ulanadi
     await bot.set_webhook(f"{WEBHOOK_URL}/webhook")
+    
+    # Slesh (/) bosganda chiqadigan buyruqlar ro'yxatini va uning yonidagi tushuntirishini kiritamiz
+    bot_commands = [
+        types.BotCommand(command="start", description="Botni qayta ishga tushirish 🚀"),
+        types.BotCommand(command="mock_ielts", description="IELTS Mock Exam (Full Part 1, 2, 3) 🏆")
+    ]
+    await bot.set_my_commands(bot_commands)
 
 def main():
     app = web.Application()
