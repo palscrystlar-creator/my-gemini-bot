@@ -110,6 +110,28 @@ async def transcribe_voice(message: types.Message) -> str:
         return ""
     finally:
         if os.path.exists(local_voice_path): os.remove(local_voice_path)
+@dp.message(F.voice)
+async def handle_normal_voice(message: types.Message):
+    await bot.send_chat_action(chat_id=message.chat.id, action="record_voice")
+    user_text = await transcribe_voice(message)
+    if not user_text: return
+    try:
+        chat_completion = ai_client.chat.completions.create(
+            messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user_text}],
+            model="llama-3.3-70b-versatile",
+        )
+        ai_response = chat_completion.choices[0].message.content
+        
+        # JennyNeural ni standart qilish
+        voice_model = "en-US-JennyNeural" 
+        
+        reply_voice_path = f"reply_{message.voice.file_id}.mp3"
+        communicate = edge_tts.Communicate(ai_response, voice_model)
+        await communicate.save(reply_voice_path)
+        await message.answer_voice(types.FSInputFile(reply_voice_path), caption=f"✍️ <i>Siz aytdingiz: {user_text}</i>", parse_mode="HTML")
+        if os.path.exists(reply_voice_path): os.remove(reply_voice_path)
+    except Exception as e:
+        await message.answer(f"Xatolik: {str(e)}")
 
 @dp.message(IELTSMockState.part1_q1, F.voice)
 async def p1_q1_handler(message: types.Message, state: FSMContext):
