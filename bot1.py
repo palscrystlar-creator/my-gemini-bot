@@ -19,6 +19,7 @@ PORT = int(os.environ.get("PORT", 8080))
 
 storage = MemoryStorage()
 bot = Bot(token=BOT_TOKEN)
+user_histories = {}
 dp = Dispatcher(storage=storage)
 ai_client = Groq(api_key=GROQ_API_KEY)
 
