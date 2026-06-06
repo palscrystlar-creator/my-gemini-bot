@@ -342,17 +342,30 @@ async def p3_q3_handler(message: types.Message, state: FSMContext):
         await message.answer(f"Hisobotda xatolik: {str(e)}")
     finally:
         await state.clear()
-# --- STANDART REJIM (MATNLI CHAT) ---
+# 1. Global o'zgaruvchi (yoki bazadan olib) foydalanuvchilar tarixini saqlash
+user_histories = {} 
+
 @dp.message(F.text)
 async def chat_with_ai(message: types.Message):
-    # Bu yerda history ishlatilmayapti!
+    user_id = message.from_user.id
+    if user_id not in user_histories:
+        user_histories[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    
+    # Yangi xabarni tarixga qo'shamiz
+    user_histories[user_id].append({"role": "user", "content": message.text})
+    
+    # Tarix bilan birga so'rov yuboramiz
     chat_completion = ai_client.chat.completions.create(
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": message.text} # Faqat oxirgi xabarni beryapti
-        ],
-        ...
+        messages=user_histories[user_id],
+        model="llama-3.3-70b-versatile",
     )
+    
+    ai_response = chat_completion.choices[0].message.content
+    
+    # AI javobini ham tarixga qo'shamiz
+    user_histories[user_id].append({"role": "assistant", "content": ai_response})
+    
+    await message.answer(ai_response)
 
 # --- STANDART REJIM (OVOZLI CHAT) ---
 @dp.message(F.voice)
