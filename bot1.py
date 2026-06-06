@@ -8,7 +8,6 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiohttp import web, ClientSession
 import edge_tts
-from pydub import AudioSegment
 
 # Server va Bot sozlamalari
 BOT_TOKEN = "8799568905:AAGY-PYkbve9LkNp2Fy922FAibTopmomu5s"
@@ -100,19 +99,14 @@ async def transcribe_voice(message: types.Message) -> str:
     local_voice_path = f"{voice_id}.ogg"
     await bot.download_file(file.file_path, local_voice_path)
     try:
-        # OGG formatini WAV formatiga o'tkazamiz (Whisper yaxshi tushunishi uchun)
-        wav_path = f"{voice_id}.wav"
-        audio = AudioSegment.from_file(local_voice_path)
-        audio.export(wav_path, format="wav")
-        
-        text = await groq_transcribe_audio(wav_path)
-        if os.path.exists(wav_path): os.remove(wav_path)
+        # Whisper OGG formatini ham to'g'ridan-to'g'ri qabul qiladi! ffmpeg shartmas!
+        text = await groq_transcribe_audio(local_voice_path)
         return text
     except: return ""
     finally:
         if os.path.exists(local_voice_path): os.remove(local_voice_path)
 
-# --- PRACTICE VA IELTS MODULLARI (HTTP'ga MOSLANDI) ---
+# --- PRACTICE VA IELTS MODULLARI ---
 @dp.message(Command("practice"))
 async def start_practice(message: types.Message, state: FSMContext):
     await state.clear()
@@ -181,7 +175,7 @@ async def stop_cmd(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("🏁 Suhbat yakunlandi.")
 
-# ==================== WEBAPP LIVE CALL API REJIMI ====================
+# ==================== WEBAPP LIVE CALL API REJIMI (FFMPEG-SIZ) ====================
 
 async def serve_index(request):
     return web.FileResponse('index.html')
@@ -192,19 +186,16 @@ async def handle_voice_call_api(request):
         audio_file = data['audio']
         user_id = data.get('user_id', 'unknown')
         
+        # WebM faylni saqlaymiz va konvertatsiya qilmasdan to'g'ridan-to'g'ri yuboramiz
         temp_webm = f"static/temp_{user_id}.webm"
-        temp_wav = f"static/temp_{user_id}.wav"
         
         with open(temp_webm, 'wb') as f:
             f.write(audio_file.file.read())
-            
-        audio = AudioSegment.from_file(temp_webm)
-        audio.export(temp_wav, format="wav")
         
-        # 1. To'g'ridan-to'g'ri HTTP orqali Whisper matnga o'girish
-        user_text = await groq_transcribe_audio(temp_wav)
+        # 1. Groq Whisper WebM formatini to'liq qo'llab-quvvatlaydi!
+        user_text = await groq_transcribe_audio(temp_webm)
         
-        # 2. To'g'ridan-to'g'ri HTTP orqali Llama javobi
+        # 2. Llama javob tayyorlaydi
         call_prompt = "You are having a real-time voice call with the user. Keep your response very short, maximum 2 sentences. Speak like a friend."
         ai_response = await groq_chat_completion([
             {"role": "system", "content": call_prompt},
@@ -216,8 +207,7 @@ async def handle_voice_call_api(request):
         communicate = edge_tts.Communicate(ai_response, "en-US-EmmaNeural")
         await communicate.save(response_filename)
         
-        for f_path in [temp_webm, temp_wav]:
-            if os.path.exists(f_path): os.remove(f_path)
+        if os.path.exists(temp_webm): os.remove(temp_webm)
             
         audio_url = f"{WEBHOOK_URL}/{response_filename}"
         return web.json_response({"status": "success", "audio_url": audio_url, "text": ai_response})
