@@ -2,10 +2,13 @@ import os
 import asyncio
 import random
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiohttp import web
 from groq import Groq
-import edge_tts  # Yangi professional ovoz kutubxonasi
+import edge_tts
 
 # Server va Bot sozlamalari
 BOT_TOKEN = "8799568905:AAGY-PYkbve9LkNp2Fy922FAibTopmomu5s"
@@ -13,100 +16,294 @@ GROQ_API_KEY = "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"
 WEBHOOK_URL = "https://my-gemini-bot-1-14qh.onrender.com"
 PORT = int(os.environ.get("PORT", 8080))
 
+storage = MemoryStorage()
 bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
+dp = Dispatcher(storage=storage)
 ai_client = Groq(api_key=GROQ_API_KEY)
 
-# Tizim qoidasi (System Prompt)
+# IELTS Speaking Mock holatlari
+class IELTSMockState(StatesGroup):
+    part1_q1 = State()
+    part1_q2 = State()
+    part1_q3 = State()
+    part2_cue = State()
+    part3_q1 = State()
+    part3_q2 = State()
+    part3_q3 = State()
+
+# Tizim qoidalari
 SYSTEM_PROMPT = (
-    "Sizning ismingiz 'ShavkatoV AI'. "
-    "QAT'IY QOIDA: Foydalanuvchi qaysi tilda gapirsa, faqat va faqat o'sha tilning o'zida javob bering. "
-    "Agar foydalanuvchi o'zbekcha gapirsa, unga faqat toza o'zbek tilida javob qaytaring va inglizcha tarjimalarni mutloq qo'shmang. "
-    "Agar foydalanuvchi inglizcha yozsa - faqat toza inglizcha, ruscha yozsa - faqat toza ruscha javob bering."
+    "Sizning ismingiz 'ShavkatoV AI'. Foydalanuvchi qaysi tilda gapirsa, faqat o'sha tilda javob bering. "
+    "Agar o'zbekcha gapirsa, faqat toza o'zbekcha javob qaytaring."
 )
+
+EXAMINER_PROMPT = (
+    "You are an expert IELTS Speaking Examiner. Your tone should be professional, polite, and strict. "
+    "Ask only ONE clear question at a time according to the part requirements. Do not output anything else."
+)
+
+# Matnni ovozga o'giriuvchi yordamchi funksiya
+async def send_examiner_voice(message: types.Message, text: str, voice="en-US-BrianNeural"):
+    reply_voice_path = f"examiner_{message.chat.id}.mp3"
+    try:
+        communicate = edge_tts.Communicate(text, voice)
+        await communicate.save(reply_voice_path)
+        voice_file = types.FSInputFile(reply_voice_path)
+        await message.answer_voice(voice_file)
+    except Exception as e:
+        await message.answer(f"[Voice Error] {text}")
+    finally:
+        if os.path.exists(reply_voice_path):
+            try: os.remove(reply_voice_path)
+            except: pass
 
 @dp.message(CommandStart())
 async def start_command(message: types.Message):
-    random_sticker = random.choice(["🚀", "🤖", "🎯", "🌟", "⚡️"])
-    interesting_facts = [
-        "Okeandagi eng chuqur joy — Mariana botiqligi bo'lib, uning tubiga tashlangan temir shar pastga yetib borishi uchun 1 soatdan ko'proq vaqt ketadi! 🌊",
-        "Asal hech qachon buzilmaydigan yagona mahsulotdir. Misr ehromlaridan topilgan 3000 yillik asal hali ham iste'molga yaroqli ekanligi aniqlangan! 🍯",
-        "Ipak qurti bor-yo'g'i 56 kun ichida o'z vaznidan 86 ming marta ko'p ovqat yeydi! 🐛",
-        "Dunyodagi eng birinchi dasturchi ayol kishi bo'lgan. Uning ismi Ada Lavleys (Ada Lovelace) edi! 👩‍💻",
-        "Inson miyasi uyg'oq paytida bitta kichik lampochkani yoqishga yetadigan miqdorda elektr energiyasi ishlab chiqaradi! 🧠⚡️",
-        "Sayyoramizdagi barcha chumolilarning umumiy vazni yer yuzidagi barcha odamlarning vazniga teng keladi! 🐜"
-    ]
-    random_fact = random.choice(interesting_facts)
-    
-    await message.answer(f"{random_sticker} {random_sticker} {random_sticker}")
     welcome_text = (
         f"<b>Salom, {message.from_user.full_name}!</b> 👋\n\n"
-        f"🤖 Men <b>ShavkatoV AI</b> botiman. Menga yozishingiz yoki <b>ovozli xabar</b> yuborishingiz mumkin! 🎙\n\n"
-        f"✨ <b>Siz uchun kunlik qiziqarli fakt:</b>\n"
-        f"<i>{random_fact}</i>"
+        f"🤖 Men <b>ShavkatoV AI</b> botiman.\n"
+        f"🎙 Oddiy rejimda men bilan matnli yoki ovozli suhbat qurishingiz mumkin.\n\n"
+        f"🏆 <b>To'liq IELTS Speaking Mock imtihonini topshirish uchun:</b> /mock_ielts buyrug'ini yuboring!"
     )
     await message.answer(welcome_text, parse_mode="HTML")
 
-# --- OVOZLI XABARLARNI QABUL QILISH ---
-@dp.message(F.voice)
-async def handle_voice_message(message: types.Message):
-    await bot.send_chat_action(chat_id=message.chat.id, action="record_voice")
+# ==================== IELTS SPEAKING MOCK EXAM ====================
+
+@dp.message(Command("mock_ielts"))
+async def start_ielts_mock(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer("🎬 <b>Welcome to the Full IELTS Speaking Mock Test!</b>\n"
+                         "This test consists of Part 1, Part 2, and Part 3.\n"
+                         "Please reply to every question using <b>VOICE MESSAGES</b> (Ovozli xabar).🎙\n\n"
+                         "<i>Starting Part 1 (Introduction and Interview)...</i>", parse_mode="HTML")
     
+    # Part 1 uchun 1-savolni generatsiya qilamiz
+    try:
+        completion = ai_client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": EXAMINER_PROMPT},
+                {"role": "user", "content": "Generate a common IELTS Speaking Part 1 topic question (e.g., about home, work, studies, or hobbies). Ask just one question."}
+            ],
+            model="llama-3.3-70b-versatile",
+        )
+        q1 = completion.choices[0].message.content
+        await message.answer(f"🗣 <b>Part 1 - Question 1:</b>\n{q1}", parse_mode="HTML")
+        await send_examiner_voice(message, q1)
+        
+        await state.set_state(IELTSMockState.part1_q1)
+        await state.update_data(p1_q1=q1, history=[])
+    except Exception as e:
+        await message.answer(f"Xatolik: {str(e)}")
+
+# --- Yordamchi funksiya: Ovozni matnga o'girish ---
+async def transcribe_voice(message: types.Message) -> str:
     voice_id = message.voice.file_id
     file = await bot.get_file(voice_id)
-    file_path = file.file_path
-    
     local_voice_path = f"{voice_id}.ogg"
-    await bot.download_file(file_path, local_voice_path)
+    await bot.download_file(file.file_path, local_voice_path)
     
     try:
-        # 1. Groq Whisper orqali ovozni matnga o'giramiz
         with open(local_voice_path, "rb") as audio_file:
             transcription = ai_client.audio.transcriptions.create(
                 file=(local_voice_path, audio_file.read()),
                 model="whisper-large-v3",
             )
-        
-        user_text = transcription.text
-        if not user_text:
-            await message.answer("Kechirasiz, ovozingizni tushunolmadim. Qaytadan yozib ko'ring.")
-            return
-
-        # 2. Llama 3 AI modelidan javob olamiz
-        chat_completion = ai_client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_text}
-            ],
-            model="llama-3.3-70b-versatile",
-        )
-        ai_response = chat_completion.choices[0].message.content
-
-        # 3. Edge-TTS orqali o'zbekcha ovoz hosil qilamiz
-        # Avtomatik tilni aniqlab mos ovozni tanlaymiz
-        voice_model = "uz-UZ-MadinaNeural" # O'zbekcha ovoz (Madina)
-        if any(word in user_text.lower() for word in ['hello', 'what', 'is', 'your', 'name']):
-            voice_model = "en-US-EmmaNeural" # Inglizcha ovoz (Emma)
-            
-        reply_voice_path = f"reply_{voice_id}.mp3"
-        
-        # Ovozli faylni yaratish
-        communicate = edge_tts.Communicate(ai_response, voice_model)
-        await communicate.save(reply_voice_path)
-
-        # 4. Foydalanuvchiga ovozli javobni yuboramiz
-        voice_file = types.FSInputFile(reply_voice_path)
-        await message.answer_voice(voice_file, caption=f"✍️ <i>Siz aytdingiz: {user_text}</i>", parse_mode="HTML")
-        
-        if os.path.exists(reply_voice_path): os.remove(reply_voice_path)
-
-    except Exception as e:
-        await message.answer(f"Ovozli xabarni qayta ishlashda xatolik: {str(e)}")
-    
+        return transcription.text
+    except:
+        return ""
     finally:
         if os.path.exists(local_voice_path): os.remove(local_voice_path)
 
-# --- MATNLI XABARLAR ---
+# --- PART 1: Q1 ANSWER -> ASK Q2 ---
+@dp.message(IELTSMockState.part1_q1, F.voice)
+async def p1_q1_handler(message: types.Message, state: FSMContext):
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    text = await transcribe_voice(message)
+    if not text:
+        await message.answer("I couldn't hear you clearly. Please repeat your answer via voice.")
+        return
+    
+    data = await state.get_data()
+    history = data.get("history", [])
+    history.append({"role": "examiner", "content": data.get("p1_q1")})
+    history.append({"role": "candidate", "content": text})
+    
+    # Navbatdagi savol
+    completion = ai_client.chat.completions.create(
+        messages=[{"role": "system", "content": EXAMINER_PROMPT}, {"role": "user", "content": f"Based on this interview context: {history}, ask the second follow-up question for Part 1."}],
+        model="llama-3.3-70b-versatile",
+    )
+    q2 = completion.choices[0].message.content
+    await message.answer(f"🗣 <b>Part 1 - Question 2:</b>\n{q2}", parse_mode="HTML")
+    await send_examiner_voice(message, q2)
+    
+    await state.update_data(p1_q2=q2, history=history)
+    await state.set_state(IELTSMockState.part1_q2)
+
+# --- PART 1: Q2 ANSWER -> ASK Q3 ---
+@dp.message(IELTSMockState.part1_q2, F.voice)
+async def p1_q2_handler(message: types.Message, state: FSMContext):
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    text = await transcribe_voice(message)
+    if not text: return
+    
+    data = await state.get_data()
+    history = data.get("history")
+    history.append({"role": "examiner", "content": data.get("p1_q2")})
+    history.append({"role": "candidate", "content": text})
+    
+    completion = ai_client.chat.completions.create(
+        messages=[{"role": "system", "content": EXAMINER_PROMPT}, {"role": "user", "content": f"Ask the third and final question for Part 1 based on: {history}"}],
+        model="llama-3.3-70b-versatile",
+    )
+    q3 = completion.choices[0].message.content
+    await message.answer(f"🗣 <b>Part 1 - Question 3:</b>\n{q3}", parse_mode="HTML")
+    await send_examiner_voice(message, q3)
+    
+    await state.update_data(p1_q3=q3, history=history)
+    await state.set_state(IELTSMockState.part1_q3)
+
+# --- PART 1: Q3 ANSWER -> START PART 2 (CUE CARD) ---
+@dp.message(IELTSMockState.part1_q3, F.voice)
+async def p1_q3_handler(message: types.Message, state: FSMContext):
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    text = await transcribe_voice(message)
+    if not text: return
+    
+    data = await state.get_data()
+    history = data.get("history")
+    history.append({"role": "examiner", "content": data.get("p1_q3")})
+    history.append({"role": "candidate", "content": text})
+    
+    await message.answer(" Moving to <b>Part 2 (Cue Card / Long Turn)</b>.\n"
+                         "I will give you a topic. You should think about it and speak for 1 to 2 minutes.", parse_mode="HTML")
+    
+    completion = ai_client.chat.completions.create(
+        messages=[{"role": "system", "content": "You are an IELTS examiner. Provide a complete IELTS Speaking Part 2 Cue Card task block. It must have a main topic sentence and 3-4 bullet points (e.g., Describe a book you read...)."}],
+        model="llama-3.3-70b-versatile",
+    )
+    cue_card = completion.choices[0].message.content
+    await message.answer(f"📋 <b>PART 2 - CUE CARD:</b>\n\n{cue_card}\n\n<i>🔴 Please record your long turn answer now (Speak for 1-2 minutes in one voice message).</i>", parse_mode="HTML")
+    await send_examiner_voice(message, "Please look at the cue card on your screen. You have one to two minutes to talk about this topic. Whenever you are ready, start your voice message.")
+    
+    await state.update_data(p2_cue=cue_card, history=history)
+    await state.set_state(IELTSMockState.part2_cue)
+
+# --- PART 2 ANSWER -> START PART 3 (Q1) ---
+@dp.message(IELTSMockState.part2_cue, F.voice)
+async def p2_handler(message: types.Message, state: FSMContext):
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    text = await transcribe_voice(message)
+    if not text: return
+    
+    data = await state.get_data()
+    history = data.get("history")
+    history.append({"role": "examiner", "content": f"Part 2 Cue Card Task: {data.get('p2_cue')}"})
+    history.append({"role": "candidate", "content": f"Part 2 Long Turn Response: {text}"})
+    
+    await message.answer(" Thank you. Let's proceed to <b>Part 3 (Two-way Discussion)</b>.\n"
+                         "I will ask you some abstract and deeper questions related to the Part 2 topic.", parse_mode="HTML")
+    
+    completion = ai_client.chat.completions.create(
+        messages=[{"role": "system", "content": EXAMINER_PROMPT}, {"role": "user", "content": f"Based on the Part 2 topic, ask the first deep analytical question for Part 3."}],
+        model="llama-3.3-70b-versatile",
+    )
+    p3_q1 = completion.choices[0].message.content
+    await message.answer(f"🗣 <b>Part 3 - Question 1:</b>\n{p3_q1}", parse_mode="HTML")
+    await send_examiner_voice(message, p3_q1)
+    
+    await state.update_data(p3_q1=p3_q1, history=history)
+    await state.set_state(IELTSMockState.part3_q1)
+
+# --- PART 3: Q1 ANSWER -> ASK Q2 ---
+@dp.message(IELTSMockState.part3_q1, F.voice)
+async def p3_q1_handler(message: types.Message, state: FSMContext):
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    text = await transcribe_voice(message)
+    if not text: return
+    
+    data = await state.get_data()
+    history = data.get("history")
+    history.append({"role": "examiner", "content": data.get("p3_q1")})
+    history.append({"role": "candidate", "content": text})
+    
+    completion = ai_client.chat.completions.create(
+        messages=[{"role": "system", "content": EXAMINER_PROMPT}, {"role": "user", "content": f"Ask the second deep Part 3 question based on: {history}"}],
+        model="llama-3.3-70b-versatile",
+    )
+    p3_q2 = completion.choices[0].message.content
+    await message.answer(f"🗣 <b>Part 3 - Question 2:</b>\n{p3_q2}", parse_mode="HTML")
+    await send_examiner_voice(message, p3_q2)
+    
+    await state.update_data(p3_q2=p3_q2, history=history)
+    await state.set_state(IELTSMockState.part3_q2)
+
+# --- PART 3: Q2 ANSWER -> ASK Q3 ---
+@dp.message(IELTSMockState.part3_q2, F.voice)
+async def p3_q2_handler(message: types.Message, state: FSMContext):
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    text = await transcribe_voice(message)
+    if not text: return
+    
+    data = await state.get_data()
+    history = data.get("history")
+    history.append({"role": "examiner", "content": data.get("p3_q2")})
+    history.append({"role": "candidate", "content": text})
+    
+    completion = ai_client.chat.completions.create(
+        messages=[{"role": "system", "content": EXAMINER_PROMPT}, {"role": "user", "content": f"Ask the third and final analytical question for Part 3 based on: {history}"}],
+        model="llama-3.3-70b-versatile",
+    )
+    p3_q3 = completion.choices[0].message.content
+    await message.answer(f"🗣 <b>Part 3 - Question 3 (Final):</b>\n{p3_q3}", parse_mode="HTML")
+    await send_examiner_voice(message, p3_q3)
+    
+    await state.update_data(p3_q3=p3_q3, history=history)
+    await state.set_state(IELTSMockState.part3_q3)
+
+# --- PART 3: Q3 ANSWER -> GENERATE FINAL FEEDBACK AND BAND SCORE ---
+@dp.message(IELTSMockState.part3_q3, F.voice)
+async def p3_q3_handler(message: types.Message, state: FSMContext):
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    await message.answer("🏁 <i>That is the end of the Speaking test. Please wait while I analyze your performance and prepare your report...</i>")
+    
+    text = await transcribe_voice(message)
+    if not text: return
+    
+    data = await state.get_data()
+    history = data.get("history")
+    history.append({"role": "examiner", "content": data.get("p3_q3")})
+    history.append({"role": "candidate", "content": text})
+    
+    try:
+        # Butun imtihon tarixini AI ga yuboramiz va to'liq o'zbekcha feedback olamiz
+        report_prompt = (
+            f"You are a senior IELTS examiner. Analyze the following complete interview history:\n{history}\n\n"
+            f"Provide a comprehensive, structured feedback report written in O'zbek tilida (Uzbek).\n"
+            f"Structure the report as follows:\n"
+            f"1. Overall Estimated Band Score (e.g., 6.5)\n"
+            f"2. Fluency and Coherence (Tahlil va kamchiliklar)\n"
+            f"3. Lexical Resource (So'z boyligi tahlili)\n"
+            f"4. Grammatical Range and Accuracy (Grammatika va xatolar)\n"
+            f"5. Key Corrections (Foydalanuvchi aytgan noto'g'ri gaplarni to'g'rilab ko'rsating)\n"
+            f"6. Tips to improve (Rivojlantirish uchun maslahatlar)"
+        )
+        
+        completion = ai_client.chat.completions.create(
+            messages=[{"role": "user", "content": report_prompt}],
+            model="llama-3.3-70b-versatile",
+        )
+        report = completion.choices[0].message.content
+        
+        await message.answer(f"📊 <b>OFFICIAL IELTS SPEAKING MOCK REPORT</b> 📊\n\n{report}")
+        await send_examiner_voice(message, "Thank you very much. Your full speaking test report is now ready on your screen. Good luck with your studies!", voice="en-US-EmmaNeural")
+        
+    except Exception as e:
+        await message.answer(f"Hisobot tayyorlashda xatolik: {str(e)}")
+    finally:
+        await state.clear()
+
+# --- STANDART REJIM (MATNLI CHAT) ---
 @dp.message(F.text)
 async def chat_with_ai(message: types.Message):
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
@@ -121,6 +318,37 @@ async def chat_with_ai(message: types.Message):
         await message.answer(chat_completion.choices[0].message.content)
     except Exception as e:
         await message.answer(f"Xatolik yuz berdi: {str(e)}")
+
+# --- STANDART REJIM (OVOZLI CHAT) ---
+@dp.message(F.voice)
+async def handle_normal_voice(message: types.Message):
+    await bot.send_chat_action(chat_id=message.chat.id, action="record_voice")
+    user_text = await transcribe_voice(message)
+    if not user_text: return
+    
+    try:
+        chat_completion = ai_client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_text}
+            ],
+            model="llama-3.3-70b-versatile",
+        )
+        ai_response = chat_completion.choices[0].message.content
+        
+        voice_model = "uz-UZ-MadinaNeural"
+        if any(word in user_text.lower() for word in ['hello', 'what', 'is', 'your', 'name']):
+            voice_model = "en-US-EmmaNeural"
+            
+        reply_voice_path = f"reply_{message.voice.file_id}.mp3"
+        communicate = edge_tts.Communicate(ai_response, voice_model)
+        await communicate.save(reply_voice_path)
+        
+        voice_file = types.FSInputFile(reply_voice_path)
+        await message.answer_voice(voice_file, caption=f"✍️ <i>Siz aytdingiz: {user_text}</i>", parse_mode="HTML")
+        if os.path.exists(reply_voice_path): os.remove(reply_voice_path)
+    except Exception as e:
+        await message.answer(f"Xatolik: {str(e)}")
 
 async def handle_webhook(request):
     url = str(request.url)
