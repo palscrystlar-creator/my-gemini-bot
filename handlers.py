@@ -38,3 +38,24 @@ async def get_random_fact(message: types.Message):
     fact = completion.choices[0].message.content
     
     await message.answer(f"💡 <b>Qiziqarli fakt:</b>\n\n{fact}", parse_mode="HTML")
+    @router.message(F.text)
+async def math_solver(message: types.Message):
+    # Foydalanuvchi yuborgan matn matematikaga o'xshaydimi?
+    text = message.text
+    # Oddiy tekshiruv: agar tarkibida sonlar va amallar (+, -, *, /, ^) bo'lsa
+    if any(char.isdigit() for char in text) and any(op in text for op in ["+", "-", "*", "/", "^", "="]):
+        
+        await message.answer("🧮 <b>Hisoblanmoqda...</b>", parse_mode="HTML")
+        
+        prompt = f"Ushbu matematik misolni yechib ber va qadam-ba-qadam tushuntir: {text}"
+        completion = ai_client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama-3.3-70b-versatile"
+        )
+        solution = completion.choices[0].message.content
+        
+        await message.answer(f"✅ <b>Yechim:</b>\n\n{solution}", parse_mode="HTML")
+    else:
+        # Agar matematik misol bo'lmasa, oddiy chat sifatida javob beradi
+        # (Buning uchun avvalgi chat logic-ni ham shu yerda saqlab qolishingiz kerak)
+        pass
