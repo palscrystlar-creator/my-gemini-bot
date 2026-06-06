@@ -43,7 +43,11 @@ EXAMINER_PROMPT = (
     "4. Do not provide conversational filler or feedback; just act as the examiner."
 )
 
-async def send_examiner_voice(message: types.Message, text: str, voice="en-US-BrianNeural"):
+# Eski qator:
+# async def send_examiner_voice(message: types.Message, text: str, voice="en-US-BrianNeural"):
+
+# YANGI QATOR:
+async def send_examiner_voice(message: types.Message, text: str, voice="en-US-JennyNeural"):
     reply_voice_path = f"examiner_{message.chat.id}.mp3"
     try:
         communicate = edge_tts.Communicate(text, voice)
