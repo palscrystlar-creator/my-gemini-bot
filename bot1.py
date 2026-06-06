@@ -119,7 +119,6 @@ async def transcribe_voice(message: types.Message) -> str:
 
 @dp.message(IELTSMockState.part1_q1, F.voice)
 async def p1_q1_handler(message: types.Message, state: FSMContext):
-    prompt = "Ask a different Part 1 question related to the previous topic. Do not repeat previous questions."
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
     text = await transcribe_voice(message)
     if not text: return
