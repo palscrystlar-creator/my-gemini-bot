@@ -38,3 +38,7 @@ async def chat_with_ai(message: types.Message):
         # Oddiy suhbat
         comp = ai_client.chat.completions.create(messages=[{"role": "user", "content": message.text}], model="llama-3.3-70b-versatile")
         await message.answer(comp.choices[0].message.content)
+@router.callback_query(F.data == "start_chat")
+async def chat_cb(callback: types.CallbackQuery):
+    await callback.message.answer("💬 Suhbat rejimi faol! Menga savol bering yoki shunchaki gaplashing.")
+    await callback.answer()
