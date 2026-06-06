@@ -35,7 +35,7 @@ async def start_command(message: types.Message):
 # --- 2. IELTS MOCK HANDLER (Boshlanishi) ---
 @dp.message(Command("mock_ielts"))
 async def start_ielts_mock(message: types.Message, state: FSMContext):
-    await message.answer("🎬 <b>IELTS Speaking Mock boshlandi!</b>\nPart 1 savoli: Where are you from?", parse_mode="HTML")
+    await message.answer("🎬 <b>IELTS Speaking Mock boshlandi!</b>\nPart 1 savoli: random?", parse_mode="HTML")
     await state.set_state(IELTSMockState.part1_q1)
 
 @dp.message(IELTSMockState.part1_q1)
