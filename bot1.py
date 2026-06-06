@@ -31,7 +31,7 @@ class IELTSMockState(StatesGroup):
     part3_q2 = State()
     part3_q3 = State()
 
-# YANGI: Erkin Amaliyot (Practice) Holati
+# Erkin Amaliyot (Practice) Holati
 class PracticeState(StatesGroup):
     choosing_topic = State()
     speaking = State()
@@ -72,7 +72,7 @@ async def start_command(message: types.Message):
     welcome_text = (
         f"<b>Assalomu alaykum, {message.from_user.full_name}!</b> 👋\n\n"
         f"🤖 Men <b>ShavkatoV AI</b> — sizning shaxsiy ingliz tili treneringizman.\n\n"
-        f"💡 <b>MUHIM YO'RIQNOMA:</b>\n"
+        f"💡 <b>`MUHIM YO'RIQNOMA:`</b>\n"
         f"Botda ikkita asosiy rejim mavjud:\n"
         f"1️⃣ 🏆 <b>/mock_ielts</b> — To'liq 3 ta qismdan iborat IELTS imtihoni (Yakunda ball va tahlil beriladi).\n"
         f"2️⃣ 🗣 <b>/practice</b> — Erkin mavzularda AI bilan do'stona ovozli muloqot (Kompleksni yo'qotish uchun).\n\n"
@@ -80,13 +80,30 @@ async def start_command(message: types.Message):
     )
     await message.answer(welcome_text, parse_mode="HTML")
 
-# ==================== YANGI: PRACTICE (ERKIN SUHBAT) REJIMI ====================
+async def transcribe_voice(message: types.Message) -> str:
+    voice_id = message.voice.file_id
+    file = await bot.get_file(voice_id)
+    local_voice_path = f"{voice_id}.ogg"
+    await bot.download_file(file.file_path, local_voice_path)
+    try:
+        with open(local_voice_path, "rb") as audio_file:
+            transcription = ai_client.audio.transcriptions.create(
+                file=(local_voice_path, audio_file.read()),
+                model="whisper-large-v3",
+            )
+        return transcription.text
+    except:
+        return ""
+    finally:
+        if os.path.exists(local_voice_path): 
+            try: os.remove(local_voice_path)
+            except: pass
+
+# ==================== PRACTICE (ERKIN SUHBAT) REJIMI ====================
 
 @dp.message(Command("practice"))
 async def start_practice(message: types.Message, state: FSMContext):
     await state.clear()
-    
-    # Mavzularni tanlash uchun tugmalar (Inline Keyboard)
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
         [types.InlineKeyboardButton(text="📱 Technology", callback_data="topic_Technology")],
         [types.InlineKeyboardButton(text="✈️ Travel & Tourism", callback_data="topic_Travel")],
@@ -94,7 +111,6 @@ async def start_practice(message: types.Message, state: FSMContext):
         [types.InlineKeyboardButton(text="🎓 Education", callback_data="topic_Education")],
         [types.InlineKeyboardButton(text="❌ Suhbati yakunlash", callback_data="stop_practice")]
     ])
-    
     await message.answer("🗣 <b>Erkin suhbat rejimiga xush kelibsiz!</b>\n"
                          "Qaysi mavzuda gaplashishni xohlaysiz? Quyidagilardan birini tanlang:", 
                          reply_markup=keyboard, parse_mode="HTML")
@@ -104,12 +120,9 @@ async def start_practice(message: types.Message, state: FSMContext):
 async def topic_selected(callback: types.CallbackQuery, state: FSMContext):
     topic = callback.data.split("_")[1]
     await callback.answer()
-    
     await callback.message.answer(f"🚀 Siz <b>{topic}</b> mavzusini tanladingiz.\n"
                                   f"Hozir men sizga birinchi savolni beraman. Menga faqat <b>ovozli xabar</b> yuborib javob bering. "
                                   f"Suhbatni tugatmoqchi bo'lsangiz, shunchaki /stop deb yozing.")
-    
-    # AI dan tanlangan mavzuda birinchi savolni olamiz
     try:
         completion = ai_client.chat.completions.create(
             messages=[
@@ -119,11 +132,9 @@ async def topic_selected(callback: types.CallbackQuery, state: FSMContext):
             model="llama-3.3-70b-versatile",
         )
         first_question = completion.choices[0].message.content
-        
         await callback.message.answer(f"💬 <b>AI:</b> {first_question}")
         await send_examiner_voice(callback.message, first_question, voice="en-US-EmmaNeural")
         
-        # Suhbat tarixini saqlaymiz
         await state.update_data(practice_history=[
             {"role": "system", "content": PRACTICE_PROMPT},
             {"role": "assistant", "content": first_question}
@@ -132,7 +143,6 @@ async def topic_selected(callback: types.CallbackQuery, state: FSMContext):
     except Exception as e:
         await callback.message.answer(f"Xatolik: {str(e)}")
 
-# Erkin suhbat davomida ovozli xabarlarni qayta ishlash
 @dp.message(PracticeState.speaking, F.voice)
 async def handle_practice_voice(message: types.Message, state: FSMContext):
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
@@ -151,18 +161,14 @@ async def handle_practice_voice(message: types.Message, state: FSMContext):
             model="llama-3.3-70b-versatile",
         )
         ai_response = completion.choices[0].message.content
-        
-        # Ekraja javobni chiqaramiz va ovozli qilib yuboramiz
         await message.answer(f"✍️ <i>You said: {user_text}</i>\n\n💬 <b>AI:</b> {ai_response}", parse_mode="HTML")
         await send_examiner_voice(message, ai_response, voice="en-US-EmmaNeural")
         
         history.append({"role": "assistant", "content": ai_response})
         await state.update_data(practice_history=history)
-        
     except Exception as e:
         await message.answer(f"Xatolik: {str(e)}")
 
-# Suhbatni to'xtatish buyrug'i
 @dp.message(Command("stop"), PracticeState.speaking)
 async def stop_practice_cmd(message: types.Message, state: FSMContext):
     await state.clear()
@@ -174,7 +180,7 @@ async def stop_practice_callback(callback: types.CallbackQuery, state: FSMContex
     await callback.answer()
     await callback.message.answer("🏁 Erkin suhbat yakunlandi. Rahmat!")
 
-# ==================== ESKI: IELTS SPEAKING MOCK EXAM ====================
+# ==================== IELTS SPEAKING MOCK EXAM ====================
 
 @dp.message(Command("mock_ielts"))
 async def start_ielts_mock(message: types.Message, state: FSMContext):
@@ -194,23 +200,6 @@ async def start_ielts_mock(message: types.Message, state: FSMContext):
         await state.update_data(p1_q1=q1, history=[])
     except Exception as e:
         await message.answer(f"Xatolik: {str(e)}")
-
-async def transcribe_voice(message: types.Message) -> str:
-    voice_id = message.voice.file_id
-    file = await bot.get_file(voice_id)
-    local_voice_path = f"{voice_id}.ogg"
-    await bot.download_file(file.file_path, local_voice_path)
-    try:
-        with open(local_voice_path, "rb") as audio_file:
-            transcription = ai_client.audio.transcriptions.create(
-                file=(local_voice_path, audio_file.read()),
-                model="whisper-large-v3",
-            )
-        return transcription.text
-    except:
-        return ""
-    finally:
-        if os.path.exists(local_voice_path): os.remove(local_voice_path)
 
 @dp.message(IELTSMockState.part1_q1, F.voice)
 async def p1_q1_handler(message: types.Message, state: FSMContext):
@@ -370,7 +359,9 @@ async def p3_q3_handler(message: types.Message, state: FSMContext):
                 communicate = edge_tts.Communicate(clean_section.replace("**", "").replace("*", ""), "uz-UZ-MadinaNeural")
                 await communicate.save(voice_path)
                 await message.answer_voice(types.FSInputFile(voice_path))
-                if os.path.exists(voice_path): os.remove(voice_path)
+                if os.path.exists(voice_path): 
+                    try: os.remove(voice_path)
+                    except: pass
                 await asyncio.sleep(1)
     except Exception as e:
         await message.answer(f"Hisobotda xatolik: {str(e)}")
@@ -409,7 +400,9 @@ async def handle_normal_voice(message: types.Message):
         communicate = edge_tts.Communicate(ai_response, voice_model)
         await communicate.save(reply_voice_path)
         await message.answer_voice(types.FSInputFile(reply_voice_path), caption=f"✍️ <i>Siz aytdingiz: {user_text}</i>", parse_mode="HTML")
-        if os.path.exists(reply_voice_path): os.remove(reply_voice_path)
+        if os.path.exists(reply_voice_path): 
+            try: os.remove(reply_voice_path)
+            except: pass
     except Exception as e:
         await message.answer(f"Xatolik: {str(e)}")
 
@@ -425,8 +418,6 @@ async def handle_webhook(request):
 
 async def on_startup(app):
     await bot.set_webhook(f"{WEBHOOK_URL}/webhook")
-    
-    # Slesh (/) menyuga yangi buyruqni qo'shamiz
     bot_commands = [
         types.BotCommand(command="start", description="Botni qayta ishga tushirish 🚀"),
         types.BotCommand(command="mock_ielts", description="IELTS Mock Exam (Full Part 1, 2, 3) 🏆"),
