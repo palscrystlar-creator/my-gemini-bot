@@ -1,53 +1,36 @@
-import uuid
-import random
-from aiogram import F, Router
-from aiogram.filters import Command
+from aiogram import Router, F, types
+from aiogram.filters import CommandStart, Command
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
 from aiogram.fsm.context import FSMContext
-from aiogram.types import FSInputFile
-import edge_tts
-import os
+import uuid, os, edge_tts
 from groq import Groq
-from aiogram import types
-# Router yaratamiz
+
 router = Router()
 ai_client = Groq(api_key="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")
-# Yordamchi funksiya
-async def send_voice_response(message, text, voice="en-US-BrianNeural"):
-    path = f"voice_{uuid.uuid4().hex}.mp3"
-    await edge_tts.Communicate(text, voice).save(path)
-    await message.answer_voice(FSInputFile(path), caption=f"🗣 Examiner: {text}")
-    os.remove(path)
 
-# Handlerlar (mock_ielts va story qismlari)
-@router.message(Command("fact"))
-async def get_random_fact(message: types.Message):
-    # AI orqali tasodifiy qiziqarli fakt olish
-    prompt = "Menga juda qiziqarli va kam odam biladigan bitta fakt ayt."
-    completion = ai_client.chat.completions.create(
-        messages=[{"role": "user", "content": prompt}],
-        model="llama-3.3-70b-versatile"
-    )
-    fact = completion.choices[0].message.content
-    
-    await message.answer(f"💡 <b>Qiziqarli fakt:</b>\n\n{fact}", parse_mode="HTML")
-    @router.message(F.text)
-async def math_solver(message: types.Message):
-    # Foydalanuvchi yuborgan matn matematikaga o'xshaydimi?
-    text = message.text
-    # Oddiy tekshiruv: agar tarkibida sonlar va amallar (+, -, *, /, ^) bo'lsa
-    if any(char.isdigit() for char in text) and any(op in text for op in ["+", "-", "*", "/", "^", "="]):
-        
-        await message.answer("🧮 <b>Hisoblanmoqda...</b>", parse_mode="HTML")
-        
-        prompt = f"Ushbu matematik misolni yechib ber va qadam-ba-qadam tushuntir: {text}"
-        completion = ai_client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="llama-3.3-70b-versatile"
-        )
-        solution = completion.choices[0].message.content
-        
-        await message.answer(f"✅ <b>Yechim:</b>\n\n{solution}", parse_mode="HTML")
+def get_main_menu():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🏆 IELTS Mock", callback_data="start_mock")],
+        [InlineKeyboardButton(text="📖 Ovozli hikoya", callback_data="start_story")],
+        [InlineKeyboardButton(text="🧮 Matematika", callback_data="start_math")]
+    ])
+
+@router.message(CommandStart())
+async def start_cmd(message: types.Message):
+    await message.answer("Salom! Bosh menu:", reply_markup=get_main_menu())
+
+@router.callback_query(F.data == "start_mock")
+async def start_mock(callback: types.CallbackQuery):
+    await callback.message.answer("Mock test boshlandi! Where are you from?")
+    await callback.answer()
+
+@router.message(F.text)
+async def global_handler(message: types.Message):
+    # Matematika
+    if any(op in message.text for op in ["+", "-", "*", "/"]):
+        comp = ai_client.chat.completions.create(messages=[{"role": "user", "content": f"Yechimni tushuntir: {message.text}"}], model="llama-3.3-70b-versatile")
+        await message.answer(comp.choices[0].message.content)
+    # Oddiy Chat
     else:
-        # Agar matematik misol bo'lmasa, oddiy chat sifatida javob beradi
-        # (Buning uchun avvalgi chat logic-ni ham shu yerda saqlab qolishingiz kerak)
-        pass
+        comp = ai_client.chat.completions.create(messages=[{"role": "user", "content": message.text}], model="llama-3.3-70b-versatile")
+        await message.answer(comp.choices[0].message.content)
