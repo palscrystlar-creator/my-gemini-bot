@@ -9,7 +9,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiohttp import web
 from groq import Groq
 import edge_tts
-
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 # Server va Bot sozlamalari
 BOT_TOKEN = "8799568905:AAGY-PYkbve9LkNp2Fy922FAibTopmomu5s"
 GROQ_API_KEY = "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"
@@ -77,52 +77,51 @@ async def start_command(message: types.Message):
 
 @dp.message(Command("mock_ielts"))
 async def start_ielts_mock(message: types.Message, state: FSMContext):
-    await state.clear()
+    await state.clear() # Oldingi ma'lumotlarni tozalaymiz
     
-    # AI har safar yangi savol topishi uchun "temperature" ni 1.0 (maksimal ijodkorlik) qilib belgilaymiz
-    # Shuningdek, modelga "har safar yangi savol" deb qat'iy buyruq beramiz.
+    explanation = (
+        "🎓 <b>IELTS Speaking Mock Test ga xush kelibsiz!</b>\n\n"
+        "Bu imtihon 3 qismdan iborat:\n"
+        "🔹 <b>Part 1:</b> 3 ta umumiy mavzudagi savol.\n"
+        "🔹 <b>Part 2:</b> 1 ta Cue Card (mavzu) bo‘yicha 2 daqiqa gapirish.\n"
+        "🔹 <b>Part 3:</b> Mavzu yuzasidan chuqurroq savollar.\n\n"
+        "⚠️ <b>Muhim qoida:</b> Har bir savolga faqat <b>OVZOLI XABAR</b> bilan javob bering. "
+        "Test oxirida sizga ballar va tahliliy hisobot yuboraman.\n\n"
+        "Tayyor bo‘lsangiz, tugmani bosing:"
+    )
     
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚀 Testni boshlash", callback_data="start_exam")]
+    ])
+    
+    await message.answer(explanation, reply_markup=keyboard, parse_mode="HTML")
+
+# 2. Tugma bosilganda imtihonni boshlovchi funksiya
+@dp.callback_query(F.data == "start_exam")
+async def process_start_exam(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.delete() # Informatsion xabarni o'chirib tashlaymiz
+    await callback.message.answer("🎬 <b>Imtihon boshlandi! Diqqat bilan eshiting...</b>", parse_mode="HTML")
+    
+    # Birinchi savolni generatsiya qilish
     try:
         completion = ai_client.chat.completions.create(
             messages=[
-                {"role": "system", "content": EXAMINER_PROMPT}, 
-                {"role": "user", "content": "Generate a COMPLETELY NEW, RANDOM IELTS Speaking Part 1 question. Do not use previously asked topics."}
+                {"role": "system", "content": EXAMINER_PROMPT},
+                {"role": "user", "content": "Generate a unique IELTS Speaking Part 1 question. Do not repeat."}
             ],
             model="llama-3.3-70b-versatile",
-            temperature=1.0  # <--- BU MUHIM: Bu AI ni "ijodkor" qiladi va savollarni xilma-xil qiladi
+            temperature=1.0 # Har safar yangi savol uchun
         )
         q1 = completion.choices[0].message.content
         
-        await message.answer("🎬 <b>Welcome to the Full IELTS Speaking Mock Test!</b>\n\nStarting Part 1...", parse_mode="HTML")
-        await message.answer(f"🗣 <b>Part 1 - Question 1:</b>\n{q1}", parse_mode="HTML")
+        await callback.message.answer(f"🗣 <b>Part 1 - Question 1:</b>\n{q1}", parse_mode="HTML")
+        await send_examiner_voice(callback.message, q1)
         
-        await send_examiner_voice(message, q1)
-        
-        # Holatni saqlash
         await state.update_data(p1_q1=q1, history=[])
         await state.set_state(IELTSMockState.part1_q1)
         
     except Exception as e:
-        await message.answer(f"Xatolik: {str(e)}")
-@dp.message(IELTSMockState.part1_q1, F.voice)
-async def p1_q1_handler(message: types.Message, state: FSMContext):
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    text = await transcribe_voice(message)
-    if not text: return
-    data = await state.get_data()
-    history = data.get("history", [])
-    history.append({"role": "examiner", "content": data.get("p1_q1")})
-    history.append({"role": "candidate", "content": text})
-    
-    completion = ai_client.chat.completions.create(
-        messages=[{"role": "system", "content": EXAMINER_PROMPT}, {"role": "user", "content": f"Ask the second follow-up question for Part 1 based on: {history}"}],
-        model="llama-3.3-70b-versatile",
-    )
-    q2 = completion.choices[0].message.content
-    await message.answer(f"🗣 <b>Part 1 - Question 2:</b>\n{q2}", parse_mode="HTML")
-    await send_examiner_voice(message, q2)
-    await state.update_data(p1_q2=q2, history=history)
-    await state.set_state(IELTSMockState.part1_q2)
+        await callback.message.answer(f"Xatolik: {str(e)}")
 
 @dp.message(IELTSMockState.part1_q2, F.voice)
 async def p1_q2_handler(message: types.Message, state: FSMContext):
