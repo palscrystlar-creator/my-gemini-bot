@@ -276,6 +276,7 @@ async def p3_q3_handler(message: types.Message, state: FSMContext):
     history.append({"role": "candidate", "content": text})
     
     try:
+        # AI dan hisobotni maxsus qismlarga bo'lingan formatda so'raymiz
         report_prompt = (
             f"Analyze this IELTS interview: {history}\n\n"
             f"Generate a detailed report in Uzbek. You MUST strictly separate the sections using '---' divider. "
@@ -300,6 +301,7 @@ async def p3_q3_handler(message: types.Message, state: FSMContext):
         )
         report_content = completion.choices[0].message.content
         
+        # Hisobotni bo'limlarga ajratib, har biriga alohida ovoz beramiz
         sections = report_content.split("---")
         
         await message.answer("📊 <b>SIZNING TO'LIQ IELTS MOCK HISOBOTINGIZ:</b>\n\n(Har bir bo'lim matni ostida uning o'zbekcha ovozli audiosi ham taqdim etiladi 👇)")
@@ -307,15 +309,18 @@ async def p3_q3_handler(message: types.Message, state: FSMContext):
         for index, section in enumerate(sections):
             clean_section = section.strip()
             if clean_section:
+                # Foydalanuvchiga matnni yuboramiz
                 await message.answer(clean_section)
                 
+                # Ovozli fayl yaratamiz (O'zbekcha Madina ovozi)
                 voice_path = f"report_part_{index}_{message.chat.id}.mp3"
                 communicate = edge_tts.Communicate(clean_section.replace("**", "").replace("*", ""), "uz-UZ-MadinaNeural")
                 await communicate.save(voice_path)
                 
+                # Ovozni yuboramiz
                 await message.answer_voice(types.FSInputFile(voice_path))
                 if os.path.exists(voice_path): os.remove(voice_path)
-                await asyncio.sleep(1)
+                await asyncio.sleep(1) # Server qizib ketmasligi uchun qisqa pauza
                 
     except Exception as e:
         await message.answer(f"Hisobotda xatolik: {str(e)}")
