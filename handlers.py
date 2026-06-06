@@ -27,9 +27,14 @@ async def send_voice_response(message, text, voice="en-US-BrianNeural"):
     os.remove(path)
 
 # Handlerlar (mock_ielts va story qismlari)
-@router.message(Command("story"))
-async def story_handler(message):
-    args = message.text.split(maxsplit=1)
-    if len(args) > 1:
-        await message.answer("⏳ Yozilmoqda...")
-        # Hikoya yaratish va ovozli yuborish mantiqi...
+@router.message(Command("fact"))
+async def get_random_fact(message: types.Message):
+    # AI orqali tasodifiy qiziqarli fakt olish
+    prompt = "Menga juda qiziqarli va kam odam biladigan bitta fakt ayt."
+    completion = ai_client.chat.completions.create(
+        messages=[{"role": "user", "content": prompt}],
+        model="llama-3.3-70b-versatile"
+    )
+    fact = completion.choices[0].message.content
+    
+    await message.answer(f"💡 <b>Qiziqarli fakt:</b>\n\n{fact}", parse_mode="HTML")
