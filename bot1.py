@@ -41,7 +41,6 @@ SYSTEM_PROMPT = (
     "3. Never ask multiple questions in a single turn.\n"
     "4. Do not provide conversational filler or feedback; just act as the examiner."
 )
-)
 
 async def send_examiner_voice(message: types.Message, text: str, voice="en-US-BrianNeural"):
     reply_voice_path = f"examiner_{message.chat.id}.mp3"
