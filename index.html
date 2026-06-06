@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Voice Call</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a2e;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .avatar-container {
+            position: relative;
+            margin-bottom: 30px;
+        }
+        .avatar {
+            width: 130px;
+            height: 130px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #007bff, #00d2ff);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            box-shadow: 0 0 20px rgba(0, 123, 255, 0.5);
+            z-index: 2;
+            position: relative;
+        }
+        .pulse {
+            position: absolute;
+            width: 130px;
+            height: 130px;
+            border-radius: 50%;
+            background: rgba(0, 123, 255, 0.3);
+            animation: pulse-animation 2s infinite;
+            z-index: 1;
+        }
+        @keyframes pulse-animation {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.6); opacity: 0; }
+        }
+        .status {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #00d2ff;
+        }
+        .timer {
+            font-size: 14px;
+            color: #a0a0b8;
+            margin-bottom: 40px;
+        }
+        .controls {
+            display: flex;
+            gap: 30px;
+        }
+        .btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 24px;
+            transition: 0.3s;
+        }
+        .btn-mic { background-color: #28a745; color: white; }
+        .btn-mic.recording { background-color: #ffc107; animation: bounce 1s infinite alternate; }
+        .btn-end { background-color: #dc3545; color: white; }
+        @keyframes bounce {
+            from { transform: translateY(0); }
+            to { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="avatar-container">
+        <div class="pulse" id="pulseRing" style="display: none;"></div>
+        <div class="avatar">🤖</div>
+    </div>
+
+    <div class="status" id="statusLabel">Ready to Call</div>
+    <div class="timer" id="timerLabel">00:00</div>
+
+    <div class="controls">
+        <button class="btn btn-mic" id="micBtn" onclick="toggleCall()">📞</button>
+        <button class="btn btn-end" onclick="closeApp()">❌</button>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand(); // Oynani to'liq ekranga ochish
+
+        let isCalling = false;
+        let mediaRecorder;
+        let audioChunks = [];
+        let timerInterval;
+        let seconds = 0;
+
+        function toggleCall() {
+            const micBtn = document.getElementById('micBtn');
+            const statusLabel = document.getElementById('statusLabel');
+            const pulseRing = document.getElementById('pulseRing');
+
+            if (!isCalling) {
+                // Qo'ng'iroqni boshlash
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        isCalling = true;
+                        micBtn.innerText = "🎤";
+                        micBtn.classList.add('recording');
+                        statusLabel.innerText = "Listening...";
+                        pulseRing.style.display = "block";
+                        
+                        // Timerni boshlash
+                        startTimer();
+
+                        mediaRecorder = new MediaRecorder(stream);
+                        mediaRecorder.ondataavailable = event => {
+                            audioChunks.push(event.data);
+                        };
+
+                        mediaRecorder.onstop = () => {
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                            sendAudioToServer(audioBlob);
+                            audioChunks = [];
+                        };
+
+                        mediaRecorder.start();
+                    })
+                    .catch(err => {
+                        alert("Mikrofonga ruxsat berilmadi!");
+                        console.error(err);
+                    });
+            } else {
+                // Gapirishni tugatib, AI javobini kutish
+                isCalling = false;
+                micBtn.innerText = "📞";
+                micBtn.classList.remove('recording');
+                statusLabel.innerText = "AI is thinking...";
+                pulseRing.style.display = "none";
+                stopTimer();
+                
+                if (mediaRecorder && mediaRecorder.state !== "inactive") {
+                    mediaRecorder.stop();
+                }
+            }
+        }
+
+        function startTimer() {
+            seconds = 0;
+            timerInterval = setInterval(() => {
+                seconds++;
+                let mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+                let secs = (seconds % 60).toString().padStart(2, '0');
+                document.getElementById('timerLabel').innerText = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+        }
+
+        function sendAudioToServer(blob) {
+            const formData = new FormData();
+            formData.append('audio', blob);
+            formData.append('user_id', tg.initDataUnsafe.user?.id || "unknown");
+
+            fetch('/api/voice-call', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('statusLabel').innerText = "AI Speaking...";
+                // AI dan kelgan ovozni telefonda yangratish
+                const audio = new Audio(data.audio_url);
+                audio.play();
+                audio.onended = () => {
+                    document.getElementById('statusLabel').innerText = "AI Finished. Tap Mic to respond.";
+                };
+            })
+            .catch(err => {
+                document.getElementById('statusLabel').innerText = "Xatolik yuz berdi.";
+                console.error(err);
+            });
+        }
+
+        function closeApp() {
+            tg.close();
+        }
+    </script>
+</body>
+</html>
