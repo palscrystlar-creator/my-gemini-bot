@@ -14,7 +14,7 @@ ai_client = Groq(api_key="gsk_0syuu6iyjwRVizbiteqLWGdyb3FY8tq9Ei3yfUmypwuhPZpFju
 
 # Savollar bazasi (boshqa o'zgaruvchilar ham shu yerda bo'ladi)
 QUESTIONS = {
-    "part1": ["Where are you from?", "What do you like about your city?"],
+    "part1": ["random?"],
     "part2": ["Describe a book you enjoyed."],
     "part3": ["Why do people read books?"]
 }
