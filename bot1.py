@@ -210,89 +210,38 @@ async def p3_q1_handler(message: types.Message, state: FSMContext):
     await state.update_data(p3_q2=p3_q2, history=history)
     await state.set_state(IELTSMockState.part3_q2)
 
-@dp.message(IELTSMockState.part3_q2, F.voice)
-async def p3_q2_handler(message: types.Message, state: FSMContext):
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    text = await transcribe_voice(message)
-    if not text: return
-    data = await state.get_data()
-    history = data.get("history")
-    history.append({"role": "examiner", "content": data.get("p3_q2")})
-    history.append({"role": "candidate", "content": text})
-    
-    completion = ai_client.chat.completions.create(
-        messages=[{"role": "system", "content": EXAMINER_PROMPT}, {"role": "user", "content": f"Ask the third question for Part 3 based on: {history}"}],
-        model="llama-3.3-70b-versatile",
-    )
-    p3_q3 = completion.choices[0].message.content
-    await message.answer(f"🗣 <b>Part 3 - Question 3 (Final):</b>\n{p3_q3}", parse_mode="HTML")
-    await send_examiner_voice(message, p3_q3)
-    await state.update_data(p3_q3=p3_q3, history=history)
-    await state.set_state(IELTSMockState.part3_q3)
-
-# ==================== MUKAMMAL OVOZLI MOCK HISOBOT QISMI ====================
 @dp.message(IELTSMockState.part3_q3, F.voice)
 async def p3_q3_handler(message: types.Message, state: FSMContext):
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    await message.answer("🏁 <i>Test tugadi! Tahlil qilinmoqda, iltimos kuting...</i>")
+    await message.answer("🏁 <i>Test tugadi! Natijalar hisoblanmoqda...</i>", parse_mode="HTML")
     
     text = await transcribe_voice(message)
-    if not text: return
-    
     data = await state.get_data()
-    history = data.get("history")
-    history.append({"role": "examiner", "content": data.get("p3_q3")})
+    history = data.get("history", [])
     history.append({"role": "candidate", "content": text})
     
+    # AI dan aniq ballarni talab qilamiz
+    report_prompt = (
+        "Analyze this IELTS Speaking interview. Provide the result in this format:\n\n"
+        "🏆 <b>Overall Band Score: [0.0-9.0]</b>\n"
+        "---------------------------\n"
+        "✅ <b>Fluency and Coherence:</b> [Score] - [Reason]\n"
+        "✅ <b>Lexical Resource:</b> [Score] - [Reason]\n"
+        "✅ <b>Grammatical Range:</b> [Score] - [Reason]\n"
+        "✅ <b>Pronunciation:</b> [Score] - [Reason]\n\n"
+        "💡 <b>Tips for improvement:</b> [Short advice]\n\n"
+        f"Interview Data: {history}"
+    )
+    
     try:
-        # AI dan hisobotni maxsus qismlarga bo'lingan formatda so'raymiz
-        report_prompt = (
-            f"Analyze this IELTS interview: {history}\n\n"
-            f"Generate a detailed report in Uzbek. You MUST strictly separate the sections using '---' divider. "
-            f"Format exactly like this:\n"
-            f"🏆 **OFFICIAL IELTS SPEAKING REPORT** 🏆\n"
-            f"**Umumiy Baholash Balli:** [Score]\n"
-            f"---"
-            f"📈 **1. Fluency and Coherence:** [Text]\n"
-            f"---"
-            f"🔤 **2. Lexical Resource:** [Text]\n"
-            f"---"
-            f"⚖️ **3. Grammatical Range:** [Text]\n"
-            f"---"
-            f"🛠️ **4. Key Corrections:** [Text]\n"
-            f"---"
-            f"💡 **5. Tips to Improve:** [Text]"
-        )
-        
         completion = ai_client.chat.completions.create(
             messages=[{"role": "user", "content": report_prompt}],
             model="llama-3.3-70b-versatile",
         )
-        report_content = completion.choices[0].message.content
-        
-        # Hisobotni bo'limlarga ajratib, har biriga alohida ovoz beramiz
-        sections = report_content.split("---")
-        
-        await message.answer("📊 <b>SIZNING TO'LIQ IELTS MOCK HISOBOTINGIZ:</b>\n\n(Har bir bo'lim matni ostida uning o'zbekcha ovozli audiosi ham taqdim etiladi 👇)")
-        
-        for index, section in enumerate(sections):
-            clean_section = section.strip()
-            if clean_section:
-                # Foydalanuvchiga matnni yuboramiz
-                await message.answer(clean_section)
-                
-                # Ovozli fayl yaratamiz (O'zbekcha Madina ovozi)
-                voice_path = f"report_part_{index}_{message.chat.id}.mp3"
-                communicate = edge_tts.Communicate(clean_section.replace("**", "").replace("*", ""), "uz-UZ-MadinaNeural")
-                await communicate.save(voice_path)
-                
-                # Ovozni yuboramiz
-                await message.answer_voice(types.FSInputFile(voice_path))
-                if os.path.exists(voice_path): os.remove(voice_path)
-                await asyncio.sleep(1) # Server qizib ketmasligi uchun qisqa pauza
-                
+        report = completion.choices[0].message.content
+        await message.answer(report, parse_mode="HTML")
     except Exception as e:
-        await message.answer(f"Hisobotda xatolik: {str(e)}")
+        await message.answer("Natijalarni shakllantirishda xatolik yuz berdi.")
     finally:
         await state.clear()
 
