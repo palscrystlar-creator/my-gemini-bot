@@ -8,6 +8,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiohttp import web
 from groq import Groq
 import edge_tts
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # Server va Bot sozlamalari
 BOT_TOKEN = "8799568905:AAGY-PYkbve9LkNp2Fy922FAibTopmomu5s"
@@ -73,39 +74,45 @@ async def start_command(message: types.Message):
 
 @dp.message(Command("mock_ielts"))
 async def start_ielts_mock(message: types.Message, state: FSMContext):
-    await state.clear()
-    
-    # IELTS Speaking Part 1 uchun professional prompt
-    prompt = (
-        "You are an official IELTS Speaking Examiner. "
-        "Ask a random, engaging Part 1 question. "
-        "Rules: Ask only ONE question. Do not introduce yourself. "
-        "Ensure the question is natural and common in IELTS."
+    # IELTS Mock nimaligini tushuntirish
+    explanation = (
+        "🎓 <b>IELTS Speaking Mock Test nima?</b>\n\n"
+        "Bu haqiqiy IELTS imtihoniga o‘xshash simulyatsiya.\n"
+        "1️⃣ <b>Part 1:</b> Kundalik mavzular bo‘yicha savollar.\n"
+        "2️⃣ <b>Part 2:</b> Berilgan mavzu (Cue Card) bo‘yicha 1-2 daqiqa gapirish.\n"
+        "3️⃣ <b>Part 3:</b> Mavzu yuzasidan chuqurroq, abstrakt savollar.\n\n"
+        "✅ <b>Qoida:</b> Har bir savolga <b>ovozli xabar</b> orqali javob berishingiz kerak. "
+        "Men sizning javoblaringizni tahlil qilib, imtihon oxirida ball va maslahatlar beraman.\n\n"
+        "Tayyor bo‘lsangiz, pastdagi tugmani bosing!"
     )
     
-    try:
-        completion = ai_client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": EXAMINER_PROMPT},
-                {"role": "user", "content": prompt}
-            ],
-            model="llama-3.3-70b-versatile",
-        )
-        q1 = completion.choices[0].message.content
-        
-        # Javobni chiroyli ko'rinishda yuborish
-        await message.answer("🎬 <b>IELTS Speaking Test Started!</b>\n\n"
-                             "<i>Please respond with a VOICE MESSAGE only.</i>", parse_mode="HTML")
-        await message.answer(f"🗣 <b>Examiner:</b> {q1}", parse_mode="HTML")
-        
-        # Ovozli xabarni yuborish
-        await send_examiner_voice(message, q1)
-        
-        await state.update_data(p1_q1=q1, history=[])
-        await state.set_state(IELTSMockState.part1_q1)
-        
-    except Exception as e:
-        await message.answer(f"Xatolik yuz berdi: {str(e)}")
+    # "Boshlash" tugmasi
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚀 Testni boshlash", callback_data="start_exam")]
+    ])
+    
+    await message.answer(explanation, reply_markup=keyboard, parse_mode="HTML")
+
+# Tugmani bosganda ishga tushadigan qism
+@dp.callback_query(F.data == "start_exam")
+async def process_start_exam(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.delete()
+    await callback.message.answer("🎬 <b>Imtihon boshlandi! Birinchi savol:</b>", parse_mode="HTML")
+    
+    # Birinchi savolni generatsiya qilish
+    completion = ai_client.chat.completions.create(
+        messages=[
+            {"role": "system", "content": EXAMINER_PROMPT},
+            {"role": "user", "content": "Generate a unique IELTS Speaking Part 1 question."}
+        ],
+        model="llama-3.3-70b-versatile",
+    )
+    q1 = completion.choices[0].message.content
+    await callback.message.answer(f"🗣 {q1}")
+    await send_examiner_voice(callback.message, q1)
+    
+    await state.update_data(p1_q1=q1, history=[])
+    await state.set_state(IELTSMockState.part1_q1)
 @dp.message(F.voice)
 async def handle_normal_voice(message: types.Message):
     await bot.send_chat_action(chat_id=message.chat.id, action="record_voice")
