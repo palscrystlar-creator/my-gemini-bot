@@ -10,6 +10,7 @@ from aiohttp import web
 from groq import Groq
 import edge_tts
 import uuid
+import sqlite3
 # Server va Bot sozlamalari
 BOT_TOKEN = "8799568905:AAGY-PYkbve9LkNp2Fy922FAibTopmomu5s"
 GROQ_API_KEY = "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"
@@ -41,7 +42,21 @@ EXAMINER_PROMPT = (
     "You are an expert IELTS Speaking Examiner.Dont repeat a queston. Your tone should be professional, angry, and strict. "
     "Ask only ONE clear question at a time according to the part requirements. Do not output anything else."
 )
+def init_db():
+    conn = sqlite3.connect("users.db")
+    cursor = conn.cursor()
+    cursor.execute('''CREATE TABLE IF NOT EXISTS users 
+                      (user_id INTEGER PRIMARY KEY, name TEXT, last_score REAL)''')
+    conn.commit()
+    conn.close()
 
+def save_user_score(user_id, name, score):
+    conn = sqlite3.connect("users.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR REPLACE INTO users VALUES (?, ?, ?)", (user_id, name, score))
+    conn.commit()
+    conn.close()
+    init_db()
 # Matnni ovozga o'giriuvchi yordamchi funksiya
 async def send_examiner_voice(message: types.Message, text: str, voice="en-US-BrianNeural"):
     reply_voice_path = f"examiner_{message.chat.id}_{uuid.uuid4().hex}.mp3"
