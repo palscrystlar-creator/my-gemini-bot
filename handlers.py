@@ -44,3 +44,16 @@ async def callback_story(callback: types.CallbackQuery):
 async def callback_math(callback: types.CallbackQuery):
     await callback.message.answer("🧮 Matematik misolni yozing. Masalan: 5 * 5 = ?")
     await callback.answer()
+@router.message(F.text & ~F.text.startswith("/"))
+async def chat_with_ai(message: types.Message):
+    # Foydalanuvchiga "yozmoqda..." belgisini ko'rsatish
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    
+    # AI orqali javob olish
+    completion = ai_client.chat.completions.create(
+        messages=[{"role": "user", "content": message.text}],
+        model="llama-3.3-70b-versatile"
+    )
+    
+    answer = completion.choices[0].message.content
+    await message.answer(answer)
