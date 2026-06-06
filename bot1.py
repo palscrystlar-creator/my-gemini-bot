@@ -57,10 +57,15 @@ async def send_examiner_voice(message: types.Message, text: str, voice="en-US-Br
 @dp.message(CommandStart())
 async def start_command(message: types.Message):
     welcome_text = (
-        f"<b>Salom, {message.from_user.full_name}!</b> 👋\n\n"
-        f"🤖 Men <b>ShavkatoV AI</b> botiman.\n"
-        f"🎙 Men bilan matnli yoki ovozli suhbat qurishingiz mumkin.\n\n"
-        f"🏆 <b>IELTS Speaking Mock imtihoni uchun:</b> /mock_ielts buyrug'ini yuboring!"
+        f"<b>Assalomu alaykum, {message.from_user.full_name}!</b> 👋\n\n"
+        f"🤖 Men <b>ShavkatoV AI</b> — sizning shaxsiy IELTS Speaking treneringizman.\n\n"
+        f"💡 <b>MUHIM MASLAHAT VA YO'RIQNOMA:</b>\n"
+        f"Imtihonni mukammal topshirish va aniq ball olish uchun quyidagilarga amal qiling:\n"
+        f"1️⃣ Quyidagi <b>/mock_ielts</b> buyrug'ini bosing.\n"
+        f"2️⃣ Bot sizga savol berganda, faqat va faqat <b>OVOZLI XABAR (Voice)</b> orqali ingliz tilida javob qaytaring.\n"
+        f"3️⃣ Part 2 (Cue Card) qismida 1-2 daqiqa davomida to'xtamay gapirishga harakat qiling.\n"
+        f"4️⃣ Imtihon yakunida bot sizga qo'ygan balingizni va xatolaringiz tahlilini ham matn, ham o'zbekcha ovozli audio shaklida taqdim etadi.\n\n"
+        f"🏆 <b>Imtihonni hoziroq boshlash uchun bosing:</b> /mock_ielts"
     )
     await message.answer(welcome_text, parse_mode="HTML")
 
