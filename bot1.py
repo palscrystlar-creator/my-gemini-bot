@@ -10,7 +10,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiohttp import web, ClientSession
 import edge_tts
 
-# Server va Bot sozlamalari
+# ==================== 1. SERVER VA BOT SOZLAMALARI ====================
 BOT_TOKEN = "8799568905:AAGY-PYkbve9LkNp2Fy922FAibTopmomu5s"
 GROQ_API_KEY = "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"
 WEBHOOK_URL = "https://my-gemini-bot-1-14qh.onrender.com"
@@ -20,10 +20,10 @@ storage = MemoryStorage()
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=storage)
 
-# Statik audio fayllar uchun papka ochish
+# Vaqtinchalik fayllar uchun papka yaratish
 os.makedirs("static", exist_ok=True)
 
-# IELTS Mock Holatlari
+# ==================== 2. FSM HOLATLARI (STATES) ====================
 class IELTSMockState(StatesGroup):
     part1_q1 = State()
     part1_q2 = State()
@@ -33,32 +33,20 @@ class IELTSMockState(StatesGroup):
     part3_q2 = State()
     part3_q3 = State()
 
-# Erkin Amaliyot (Practice) Bosqichlari
 class PracticeState(StatesGroup):
     choosing_ai = State()
     choosing_level = State()
     choosing_topic = State()
     speaking = State()
 
-# Tizim qoidalari
-SYSTEM_PROMPT = (
-    "Sizning ismingiz 'ShavkatoV AI'. Foydalanuvchi qaysi tilda gapirsa, faqat o'sha tilda javob bering. "
-    "Agar o'zbekcha gapirsa, faqat toza o'zbekcha javob qaytaring."
-)
+# Tizim promptlari
+SYSTEM_PROMPT = "Sizning ismingiz 'ShavkatoV AI'. Foydalanuvchi qaysi tilda gapirsa, faqat o'sha tilda qisqa javob bering."
+EXAMINER_PROMPT = "You are an expert IELTS Speaking Examiner. Your tone should be professional and strict. Ask only ONE clear question at a time."
 
-EXAMINER_PROMPT = (
-    "You are an expert IELTS Speaking Examiner. Your tone should be professional, polite, and strict. "
-    "Ask only ONE clear question at a time according to the part requirements. Do not output anything else."
-)
-
-# ==================== GROQ DIRECT HTTP API FUNCTIONS ====================
+# ==================== 3. GROQ VA AUDIO API FUNKSIYALARI ====================
 
 async def groq_chat_completion(messages, model="llama-3.3-70b-versatile"):
-    """ Groq API bilan to'g'ridan-to'g'ri HTTP Chat muloqoti (groq kutubxonasiz) """
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     payload = {"model": model, "messages": messages}
     async with ClientSession() as session:
         async with session.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload) as resp:
@@ -66,7 +54,6 @@ async def groq_chat_completion(messages, model="llama-3.3-70b-versatile"):
             return result["choices"][0]["message"]["content"]
 
 async def groq_transcribe_audio(file_path):
-    """ Groq Whisper API orqali ovozni matnga o'girish (FFmpeg talab qilmaydi) """
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
     data = web.FormData()
     data.add_field('file', open(file_path, 'rb'), filename=os.path.basename(file_path))
@@ -76,182 +63,131 @@ async def groq_transcribe_audio(file_path):
             result = await resp.json()
             return result.get("text", "")
 
-# Ovoz yuborish umumiy funksiyasi
 async def send_examiner_voice(message: types.Message, text: str, voice="en-US-BrianNeural"):
     reply_voice_path = f"static/examiner_{message.chat.id}_{uuid.uuid4().hex}.mp3"
     try:
         communicate = edge_tts.Communicate(text, voice)
         await communicate.save(reply_voice_path)
-        voice_file = types.FSInputFile(reply_voice_path)
-        await message.answer_voice(voice_file)
-    except Exception as e:
+        await message.answer_voice(types.FSInputFile(reply_voice_path))
+    except:
         await message.answer(f"[Voice Error] {text}")
     finally:
         if os.path.exists(reply_voice_path):
             try: os.remove(reply_voice_path)
             except: pass
 
-@dp.message(CommandStart())
-async def start_command(message: types.Message):
-    welcome_text = (
-        f"<b>Assalomu alaykum, {message.from_user.full_name}!</b> 👋\n\n"
-        f"🤖 Men <b>ShavkatoV AI</b> — sizning shaxsiy ingliz tili treneringizman.\n\n"
-        f"💡 <b>`MUHIM YO'RIQNOMA:`</b>\n"
-        f"Botda ikkita asosiy rejim mavjud:\n"
-        f"1️⃣ 🏆 <b>/mock_ielts</b> — To'liq 3 ta qismdan iborat IELTS imtihoni va Band Score.\n"
-        f"2️⃣ 🗣 <b>/practice</b> — AI turi, darajangiz va mavzuni tanlab erkin muloqot qilish.\n\n"
-        f"<i>Iltimos, bot savollariga faqat <b>OVOZLI XABAR</b> orqali javob bering!</i>"
-    )
-    await message.answer(welcome_text, parse_mode="HTML")
-
 async def transcribe_voice(message: types.Message) -> str:
     voice_id = message.voice.file_id
     file = await bot.get_file(voice_id)
-    local_voice_path = f"{voice_id}.ogg"
+    local_voice_path = f"static/{voice_id}.ogg"
     await bot.download_file(file.file_path, local_voice_path)
     try:
-        text = await groq_transcribe_audio(local_voice_path)
-        return text
+        return await groq_transcribe_audio(local_voice_path)
     except:
         return ""
     finally:
-        if os.path.exists(local_voice_path): 
+        if os.path.exists(local_voice_path):
             try: os.remove(local_voice_path)
             except: pass
 
-# ==================== MUKAMMAL PRACTICE REJIMI ====================
+# ==================== 4. BOT HANDLERLARI ====================
 
+@dp.message(CommandStart())
+async def start_command(message: types.Message):
+    webapp_url = f"{WEBHOOK_URL}/"
+    keyboard = types.ReplyKeyboardMarkup(
+        keyboard=[[types.KeyboardButton(text="📞 Live AI Call", web_app=types.WebAppInfo(url=webapp_url))]],
+        resize_keyboard=True
+    )
+    welcome_text = (
+        f"<b>Assalomu alaykum, {message.from_user.full_name}!</b> 👋\n\n"
+        f"🤖 Men <b>ShavkatoV AI</b> — sizning ingliz tili treneringizman.\n\n"
+        f"📱 Pastdagi <b>'📞 Live AI Call'</b> tugmasini bosib, veb-sahifa orqali jonli qo'ng'iroq rejimiga o'ting!\n\n"
+        f"Yoki bot ichidagi rejimlar:\n"
+        f"1️⃣ 🏆 /mock_ielts — To'liq IELTS imtihoni (Band Score bilan)\n"
+        f"2️⃣ 🗣 /practice — Erkin muloqot"
+    )
+    await message.answer(welcome_text, reply_markup=keyboard, parse_mode="HTML")
+
+# --- ERKIN PRACTICE REJIMI ---
 @dp.message(Command("practice"))
 async def start_practice(message: types.Message, state: FSMContext):
     await state.clear()
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
-        [types.InlineKeyboardButton(text="👨‍💼 Mr. Brian (Strict & British)", callback_data="ai_en-GB-RyanNeural")],
-        [types.InlineKeyboardButton(text="👩‍💼 Miss. Emma (Friendly & American)", callback_data="ai_en-US-EmmaNeural")],
-        [types.InlineKeyboardButton(text="❌ Bekor qilish", callback_data="stop_practice")]
+        [types.InlineKeyboardButton(text="👨‍💼 Mr. Brian (British)", callback_data="ai_en-GB-RyanNeural")],
+        [types.InlineKeyboardButton(text="👩‍💼 Miss. Emma (American)", callback_data="ai_en-US-EmmaNeural")]
     ])
-    await message.answer("🤖 <b>1-Bosqich: AI Suhbatdoshingizni tanlang:</b>\nKim bilan suhbatlashishni xohlaysiz?", reply_markup=keyboard, parse_mode="HTML")
+    await message.answer("🤖 <b>AI Suhbatdoshingizni tanlang:</b>", reply_markup=keyboard, parse_mode="HTML")
     await state.set_state(PracticeState.choosing_ai)
 
 @dp.callback_query(F.data.startswith("ai_"))
 async def ai_selected(callback: types.CallbackQuery, state: FSMContext):
-    selected_ai = callback.data.split("_")[1]
-    await state.update_data(chosen_ai=selected_ai)
-    await callback.answer()
-
+    await state.update_data(chosen_ai=callback.data.split("_")[1])
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
-        [types.InlineKeyboardButton(text="🟢 Beginner (A1-A2)", callback_data="lvl_Beginner")],
-        [types.InlineKeyboardButton(text="🟡 Intermediate (B1-B2)", callback_data="lvl_Intermediate")],
-        [types.InlineKeyboardButton(text="🔴 Advanced (C1-C2)", callback_data="lvl_Advanced")],
-        [types.InlineKeyboardButton(text="❌ Bekor qilish", callback_data="stop_practice")]
+        [types.InlineKeyboardButton(text="🟢 Beginner", callback_data="lvl_Beginner")],
+        [types.InlineKeyboardButton(text="🟡 Intermediate", callback_data="lvl_Intermediate")],
+        [types.InlineKeyboardButton(text="🔴 Advanced", callback_data="lvl_Advanced")]
     ])
-    await callback.message.edit_text("📊 <b>2-Bosqich: Ingliz tili darajangizni tanlang:</b>\nAI qanday darajada savol bersin?", reply_markup=keyboard, parse_mode="HTML")
+    await callback.message.edit_text("📊 <b>Darajangizni tanlang:</b>", reply_markup=keyboard, parse_mode="HTML")
     await state.set_state(PracticeState.choosing_level)
 
 @dp.callback_query(F.data.startswith("lvl_"))
 async def level_selected(callback: types.CallbackQuery, state: FSMContext):
-    selected_level = callback.data.split("_")[1]
-    await state.update_data(chosen_level=selected_level)
-    await callback.answer()
-
+    await state.update_data(chosen_level=callback.data.split("_")[1])
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
-        [types.InlineKeyboardButton(text="📱 Technology & AI", callback_data="prctopic_Technology")],
-        [types.InlineKeyboardButton(text="✈️ Travel & Hobbies", callback_data="prctopic_Travel")],
-        [types.InlineKeyboardButton(text="🍔 Food & Daily Life", callback_data="prctopic_Food")],
-        [types.InlineKeyboardButton(text="🎓 Education & Career", callback_data="prctopic_Education")],
-        [types.InlineKeyboardButton(text="❌ Suhbati yakunlash", callback_data="stop_practice")]
+        [types.InlineKeyboardButton(text="📱 Technology", callback_data="prctopic_Technology")],
+        [types.InlineKeyboardButton(text="✈️ Travel", callback_data="prctopic_Travel")]
     ])
-    await callback.message.edit_text("📱 <b>3-Bosqich: Suhbat mavzusini tanlang:</b>\nQaysi mavzu atrofida gaplashamiz?", reply_markup=keyboard, parse_mode="HTML")
+    await callback.message.edit_text("📱 <b>Mavzuni tanlang:</b>", reply_markup=keyboard, parse_mode="HTML")
     await state.set_state(PracticeState.choosing_topic)
 
 @dp.callback_query(F.data.startswith("prctopic_"))
 async def topic_selected(callback: types.CallbackQuery, state: FSMContext):
     topic = callback.data.split("_")[1]
-    await callback.answer()
-    
     data = await state.get_data()
     ai_voice = data.get("chosen_ai")
     level = data.get("chosen_level")
-    
     await callback.message.delete()
-    await callback.message.answer(f"🚀 <b>Suhbat boshlandi!</b>\n"
-                                  f"👤 <b>AI Ovoz:</b> {'Brian' if 'Ryan' in ai_voice else 'Emma'}\n"
-                                  f"📊 <b>Daraja:</b> {level}\n"
-                                  f"📱 <b>Mavzu:</b> {topic}\n\n"
-                                  f"<i>Menga faqat <b>ovozli xabar</b> yuboring. /stop orqali tugating.</i>", parse_mode="HTML")
     
-    custom_prompt = (
-        f"You are a friendly English conversation partner. The user wants to practice speaking on the topic '{topic}'. "
-        f"The user's English level is {level}. Respond warmly, keep your response under 3 sentences, and ask ONE interesting question."
-    )
+    await callback.message.answer(f"🚀 <b>Suhbat boshlandi!</b> To'xtatish uchun /stop deb yozing.")
+    custom_prompt = f"You are an English partner. Topic: {topic}. Level: {level}. Keep it short (max 2 sentences) and ask a question."
+    first_q = await groq_chat_completion([{"role": "system", "content": custom_prompt}, {"role": "user", "content": "Start conversation"}])
     
-    try:
-        first_question = await groq_chat_completion([
-            {"role": "system", "content": custom_prompt},
-            {"role": "user", "content": f"Start the conversation about {topic}."}
-        ])
-        
-        await callback.message.answer(f"💬 <b>AI:</b> {first_question}")
-        await send_examiner_voice(callback.message, first_question, voice=ai_voice)
-        
-        await state.update_data(practice_prompt=custom_prompt, chosen_ai=ai_voice, practice_history=[
-            {"role": "system", "content": custom_prompt},
-            {"role": "assistant", "content": first_question}
-        ])
-        await state.set_state(PracticeState.speaking)
-    except Exception as e:
-        await callback.message.answer(f"Xatolik: {str(e)}")
+    await callback.message.answer(f"💬 <b>AI:</b> {first_q}")
+    await send_examiner_voice(callback.message, first_q, voice=ai_voice)
+    await state.update_data(practice_history=[{"role": "system", "content": custom_prompt}, {"role": "assistant", "content": first_q}], chosen_ai=ai_voice)
+    await state.set_state(PracticeState.speaking)
 
 @dp.message(PracticeState.speaking, F.voice)
 async def handle_practice_voice(message: types.Message, state: FSMContext):
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
     user_text = await transcribe_voice(message)
-    if not user_text:
-        await message.answer("I couldn't catch that. Could you please say it again?")
-        return
-    
+    if not user_text: return
     data = await state.get_data()
     history = data.get("practice_history", [])
     ai_voice = data.get("chosen_ai")
     history.append({"role": "user", "content": user_text})
     
-    try:
-        ai_response = await groq_chat_completion(history)
-        await message.answer(f"✍️ <i>You said: {user_text}</i>\n\n💬 <b>AI:</b> {ai_response}", parse_mode="HTML")
-        await send_examiner_voice(message, ai_response, voice=ai_voice)
-        
-        history.append({"role": "assistant", "content": ai_response})
-        await state.update_data(practice_history=history)
-    except Exception as e:
-        await message.answer(f"Xatolik: {str(e)}")
+    ai_response = await groq_chat_completion(history)
+    await message.answer(f"✍️ <i>You: {user_text}</i>\n\n💬 <b>AI:</b> {ai_response}", parse_mode="HTML")
+    await send_examiner_voice(message, ai_response, voice=ai_voice)
+    history.append({"role": "assistant", "content": ai_response})
+    await state.update_data(practice_history=history)
 
-@dp.message(Command("stop"), PracticeState.speaking)
-async def stop_practice_cmd(message: types.Message, state: FSMContext):
+@dp.message(Command("stop"))
+async def stop_cmd(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer("🏁 Erkin suhbat yakunlandi. Oddiy rejimga qaytdingiz. Rahmat!")
+    await message.answer("🏁 Suhbat yoki imtihon yakunlandi.")
 
-@dp.callback_query(F.data == "stop_practice")
-async def stop_practice_callback(callback: types.CallbackQuery, state: FSMContext):
-    await state.clear()
-    await callback.answer()
-    await callback.message.edit_text("🏁 Erkin suhbat bekor qilindi.")
-
-# ==================== IELTS SPEAKING MOCK EXAM ====================
-
+# --- IELTS SPEAKING MOCK EXAM REJIMI ---
 @dp.message(Command("mock_ielts"))
 async def start_ielts_mock(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer("🎬 <b>Welcome to the Full IELTS Speaking Mock Test!</b>\nPlease reply to every question using <b>VOICE MESSAGES</b>.🎙\n\n<i>Starting Part 1...</i>", parse_mode="HTML")
-    try:
-        q1 = await groq_chat_completion([
-            {"role": "system", "content": EXAMINER_PROMPT},
-            {"role": "user", "content": "Generate a common IELTS Speaking Part 1 topic question. Ask just one question."}
-        ])
-        await message.answer(f"🗣 <b>Part 1 - Question 1:</b>\n{q1}", parse_mode="HTML")
-        await send_examiner_voice(message, q1)
-        await state.set_state(IELTSMockState.part1_q1)
-        await state.update_data(p1_q1=q1, history=[])
-    except Exception as e:
-        await message.answer(f"Xatolik: {str(e)}")
+    await message.answer("🏆 <b>IELTS Mock Test boshlandi!</b>\nSavollarga faqat ovozli xabar orqali javob bering.", parse_mode="HTML")
+    q1 = await groq_chat_completion([{"role": "system", "content": EXAMINER_PROMPT}, {"role": "user", "content": "Ask Part 1 question 1"}])
+    await message.answer(f"🗣 <b>Examiner:</b> {q1}")
+    await send_examiner_voice(message, q1)
+    await state.update_data(p1_q1=q1, history=[])
+    await state.set_state(IELTSMockState.part1_q1)
 
 @dp.message(IELTSMockState.part1_q1, F.voice)
 async def p1_q1_handler(message: types.Message, state: FSMContext):
@@ -260,12 +196,8 @@ async def p1_q1_handler(message: types.Message, state: FSMContext):
     data = await state.get_data()
     history = data.get("history", [])
     history.append({"role": "user", "content": f"Examiner: {data.get('p1_q1')} | Candidate: {text}"})
-    
-    q2 = await groq_chat_completion([
-        {"role": "system", "content": EXAMINER_PROMPT},
-        {"role": "user", "content": f"Ask the second follow-up question for Part 1 based on: {history}"}
-    ])
-    await message.answer(f"🗣 <b>Part 1 - Question 2:</b>\n{q2}", parse_mode="HTML")
+    q2 = await groq_chat_completion([{"role": "system", "content": EXAMINER_PROMPT}, {"role": "user", "content": f"Ask Part 1 follow up based on: {history}"}])
+    await message.answer(f"🗣 <b>Examiner:</b> {q2}")
     await send_examiner_voice(message, q2)
     await state.update_data(p1_q2=q2, history=history)
     await state.set_state(IELTSMockState.part1_q2)
@@ -277,12 +209,8 @@ async def p1_q2_handler(message: types.Message, state: FSMContext):
     data = await state.get_data()
     history = data.get("history")
     history.append({"role": "user", "content": f"Examiner: {data.get('p1_q2')} | Candidate: {text}"})
-    
-    q3 = await groq_chat_completion([
-        {"role": "system", "content": EXAMINER_PROMPT},
-        {"role": "user", "content": f"Ask the third question for Part 1 based on: {history}"}
-    ])
-    await message.answer(f"🗣 <b>Part 1 - Question 3:</b>\n{q3}", parse_mode="HTML")
+    q3 = await groq_chat_completion([{"role": "system", "content": EXAMINER_PROMPT}, {"role": "user", "content": "Ask Part 1 final question"}])
+    await message.answer(f"🗣 <b>Examiner:</b> {q3}")
     await send_examiner_voice(message, q3)
     await state.update_data(p1_q3=q3, history=history)
     await state.set_state(IELTSMockState.part1_q3)
@@ -295,12 +223,10 @@ async def p1_q3_handler(message: types.Message, state: FSMContext):
     history = data.get("history")
     history.append({"role": "user", "content": f"Examiner: {data.get('p1_q3')} | Candidate: {text}"})
     
-    await message.answer(" Moving to <b>Part 2 (Cue Card)</b>.", parse_mode="HTML")
-    cue_card = await groq_chat_completion([
-        {"role": "system", "content": "You are an IELTS examiner. Provide a complete IELTS Speaking Part 2 Cue Card task block."}
-    ])
-    await message.answer(f"📋 <b>PART 2 - CUE CARD:</b>\n\n{cue_card}\n\n<i>🔴 Please record your voice now (1-2 minutes).</i>", parse_mode="HTML")
-    await send_examiner_voice(message, "Please look at the cue card on your screen. Start your voice message whenever you are ready.")
+    await message.answer("➡️ <b>Part 2 (Cue Card) boshlanmoqda...</b>", parse_mode="HTML")
+    cue_card = await groq_chat_completion([{"role": "system", "content": "Provide an IELTS Cue Card block topic."}])
+    await message.answer(f"📋 <b>CUE CARD:</b>\n\n{cue_card}\n\n<i>🔴 Tayyor bo'lib ovoz yuboring (1-2 daqiqa gapiring).</i>", parse_mode="HTML")
+    await send_examiner_voice(message, "Please speak about the topic on your screen.")
     await state.update_data(p2_cue=cue_card, history=history)
     await state.set_state(IELTSMockState.part2_cue)
 
@@ -310,14 +236,11 @@ async def p2_handler(message: types.Message, state: FSMContext):
     if not text: return
     data = await state.get_data()
     history = data.get("history")
-    history.append({"role": "user", "content": f"Part 2 Cue Card: {data.get('p2_cue')} | Candidate Response: {text}"})
+    history.append({"role": "user", "content": f"Cue Card Topic: {data.get('p2_cue')} | Candidate Part 2 speech: {text}"})
     
-    await message.answer(" Proceeding to <b>Part 3 (Discussion)</b>.", parse_mode="HTML")
-    p3_q1 = await groq_chat_completion([
-        {"role": "system", "content": EXAMINER_PROMPT},
-        {"role": "user", "content": f"Ask the first deep question for Part 3 based on Part 2 topic."}
-    ])
-    await message.answer(f"🗣 <b>Part 3 - Question 1:</b>\n{p3_q1}", parse_mode="HTML")
+    await message.answer("➡️ <b>Part 3 (Discussion) boshlanmoqda...</b>", parse_mode="HTML")
+    p3_q1 = await groq_chat_completion([{"role": "system", "content": EXAMINER_PROMPT}, {"role": "user", "content": "Ask a deep Part 3 question related to Part 2"}])
+    await message.answer(f"🗣 <b>Examiner:</b> {p3_q1}")
     await send_examiner_voice(message, p3_q1)
     await state.update_data(p3_q1=p3_q1, history=history)
     await state.set_state(IELTSMockState.part3_q1)
@@ -329,12 +252,8 @@ async def p3_q1_handler(message: types.Message, state: FSMContext):
     data = await state.get_data()
     history = data.get("history")
     history.append({"role": "user", "content": f"Examiner: {data.get('p3_q1')} | Candidate: {text}"})
-    
-    p3_q2 = await groq_chat_completion([
-        {"role": "system", "content": EXAMINER_PROMPT},
-        {"role": "user", "content": f"Ask the second Part 3 question based on: {history}"}
-    ])
-    await message.answer(f"🗣 <b>Part 3 - Question 2:</b>\n{p3_q2}", parse_mode="HTML")
+    p3_q2 = await groq_chat_completion([{"role": "system", "content": EXAMINER_PROMPT}, {"role": "user", "content": f"Ask second deep question based on: {history}"}])
+    await message.answer(f"🗣 <b>Examiner:</b> {p3_q2}")
     await send_examiner_voice(message, p3_q2)
     await state.update_data(p3_q2=p3_q2, history=history)
     await state.set_state(IELTSMockState.part3_q2)
@@ -346,20 +265,15 @@ async def p3_q2_handler(message: types.Message, state: FSMContext):
     data = await state.get_data()
     history = data.get("history")
     history.append({"role": "user", "content": f"Examiner: {data.get('p3_q2')} | Candidate: {text}"})
-    
-    p3_q3 = await groq_chat_completion([
-        {"role": "system", "content": EXAMINER_PROMPT},
-        {"role": "user", "content": f"Ask the third question for Part 3 based on: {history}"}
-    ])
-    await message.answer(f"🗣 <b>Part 3 - Question 3 (Final):</b>\n{p3_q3}", parse_mode="HTML")
+    p3_q3 = await groq_chat_completion([{"role": "system", "content": EXAMINER_PROMPT}, {"role": "user", "content": "Ask final follow up question for Part 3"}])
+    await message.answer(f"🗣 <b>Examiner (Final):</b> {p3_q3}")
     await send_examiner_voice(message, p3_q3)
     await state.update_data(p3_q3=p3_q3, history=history)
     await state.set_state(IELTSMockState.part3_q3)
 
 @dp.message(IELTSMockState.part3_q3, F.voice)
 async def p3_q3_handler(message: types.Message, state: FSMContext):
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    await message.answer("🏁 <i>Test tugadi! Tahlil qilinmoqda, iltimos kuting...</i>")
+    await message.answer("🏁 <b>Imtihon tugadi! AI hozir hisobot va Band Score tayyorlamoqda, kuting...</b>")
     text = await transcribe_voice(message)
     if not text: return
     data = await state.get_data()
@@ -367,104 +281,164 @@ async def p3_q3_handler(message: types.Message, state: FSMContext):
     history.append({"role": "user", "content": f"Examiner: {data.get('p3_q3')} | Candidate: {text}"})
     
     try:
-        report_prompt = (
-            f"Analyze this IELTS interview: {history}\n\n"
-            f"Generate a detailed report in Uzbek. You MUST strictly separate the sections using '---' divider. "
-            f"Format exactly like this:\n"
-            f"🏆 **OFFICIAL IELTS SPEAKING REPORT** 🏆\n"
-            f"**Umumiy Baholash Balli:** [Score]\n"
-            f"---"
-            f"📈 **1. Fluency and Coherence:** [Text]\n"
-            f"---"
-            f"🔤 **2. Lexical Resource:** [Text]\n"
-            f"---"
-            f"⚖️ **3. Grammatical Range:** [Text]\n"
-            f"---"
-            f"🛠️ **4. Key Corrections:** [Text]\n"
-            f"---"
-            f"💡 **5. Tips to Improve:** [Text]"
-        )
+        report_prompt = f"Analyze this full IELTS interview history: {history}. Generate an official detailed IELTS report in Uzbek. Give Band Score out of 9.0 and feedback. Split sections using '---' divider."
         report_content = await groq_chat_completion([{"role": "user", "content": report_prompt}])
         sections = report_content.split("---")
         
         await message.answer("📊 <b>SIZNING TO'LIQ IELTS MOCK HISOBOTINGIZ:</b>")
-        for index, section in enumerate(sections):
+        for section in sections:
             clean_section = section.strip()
             if clean_section:
                 await message.answer(clean_section)
-                voice_path = f"static/report_part_{index}_{message.chat.id}.mp3"
+                voice_path = f"static/report_{uuid.uuid4().hex}.mp3"
                 communicate = edge_tts.Communicate(clean_section.replace("**", "").replace("*", ""), "uz-UZ-MadinaNeural")
                 await communicate.save(voice_path)
                 await message.answer_voice(types.FSInputFile(voice_path))
-                if os.path.exists(voice_path): 
-                    try: os.remove(voice_path)
-                    except: pass
+                if os.path.exists(voice_path): os.remove(voice_path)
                 await asyncio.sleep(1)
     except Exception as e:
         await message.answer(f"Xatolik: {str(e)}")
     finally:
         await state.clear()
 
-# --- STANDART MATNLI CHAT ---
+# --- STANDART ODDIY CHAT ---
 @dp.message(F.text)
-async def chat_with_ai(message: types.Message):
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    try:
-        ai_reply = await groq_chat_completion([
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": message.text}
-        ])
-        await message.answer(ai_reply)
-    except Exception as e:
-        await message.answer(f"Xatolik: {str(e)}")
+async def normal_text(message: types.Message):
+    reply = await groq_chat_completion([{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": message.text}])
+    await message.answer(reply)
 
-# --- STANDART OVOZLI CHAT ---
 @dp.message(F.voice)
-async def handle_normal_voice(message: types.Message):
-    await bot.send_chat_action(chat_id=message.chat.id, action="record_voice")
+async def normal_voice(message: types.Message):
     user_text = await transcribe_voice(message)
     if not user_text: return
+    ai_reply = await groq_chat_completion([{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user_text}])
+    reply_voice_path = f"static/normal_{uuid.uuid4().hex}.mp3"
+    communicate = edge_tts.Communicate(ai_reply, "en-US-EmmaNeural")
+    await communicate.save(reply_voice_path)
+    await message.answer_voice(types.FSInputFile(reply_voice_path), caption=f"✍️ <i>You: {user_text}</i>", parse_mode="HTML")
+    if os.path.exists(reply_voice_path): os.remove(reply_voice_path)
+
+# ==================== 5. LIVE CALL WEBAPP INTERFEJSI VA API ====================
+
+async def serve_index(request):
+    """ Live Call tugmasi bosilganda ochiladigan chiroyli UI sahifa """
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Live AI Call</title>
+        <style>
+            body { font-family: Arial, sans-serif; background: #0f172a; color: white; text-align: center; padding: 50px 20px; }
+            .status { font-size: 24px; color: #38bdf8; margin-bottom: 40px; }
+            .btn { width: 150px; height: 150px; border-radius: 50%; border: none; background: #ef4444; color: white; font-size: 18px; cursor: pointer; box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); font-weight: bold; }
+            .btn.recording { background: #22c55e; box-shadow: 0 0 20px rgba(34, 197, 94, 0.5); }
+            .response-text { margin-top: 30px; font-style: italic; color: #cbd5e1; }
+        </style>
+    </head>
+    <body>
+        <div class="status" id="status">📞 Click to Start Live Call</div>
+        <button class="btn" id="callBtn">START</button>
+        <div class="response-text" id="respText"></div>
+
+        <script>
+            let mediaRecorder;
+            let audioChunks = [];
+            const btn = document.getElementById('callBtn');
+            const status = document.getElementById('status');
+            const respText = document.getElementById('respText');
+
+            btn.addEventListener('click', async () => {
+                if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    
+                    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                    mediaRecorder.onstop = async () => {
+                        status.innerText = "⌛ AI is thinking...";
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const formData = new FormData();
+                        formData.append('audio', audioBlob);
+
+                        const res = await fetch('/api/voice-call', { method: 'POST', body: formData });
+                        const data = await res.json();
+                        
+                        if (data.status === 'success') {
+                            respText.innerText = "🤖 AI: " + data.text;
+                            status.innerText = "🔊 Speaking...";
+                            const audio = new Audio(data.audio_url);
+                            audio.play();
+                            audio.onended = () => { status.innerText = "📞 Click to speak again"; btn.innerText = "TALK"; };
+                        }
+                    };
+
+                    mediaRecorder.start();
+                    status.innerText = "🎙️ Listening... Speak now.";
+                    btn.innerText = "STOP";
+                    btn.classList.add('recording');
+                } else {
+                    mediaRecorder.stop();
+                    btn.innerText = "PROCESSING";
+                    btn.classList.remove('recording');
+                }
+            });
+        </script>
+    </body>
+    </html>
+    """
+    return web.Response(text=html_content, content_type='text/html')
+
+async def handle_voice_call_api(request):
+    """ WebApp'dan kelgan jonli audio so'rovni qayta ishlash """
     try:
+        data = await request.post()
+        audio_file = data['audio']
+        temp_webm = f"static/call_{uuid.uuid4().hex}.webm"
+        with open(temp_webm, 'wb') as f:
+            f.write(audio_file.file.read())
+        
+        user_text = await groq_transcribe_audio(temp_webm)
+        if os.path.exists(temp_webm): os.remove(temp_webm)
+        
+        if not user_text:
+            return web.json_response({"status": "success", "text": "I didn't hear you.", "audio_url": ""})
+            
         ai_response = await groq_chat_completion([
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": "You are having a continuous live phone call. Keep response under 2 short sentences. Ask a natural question back."},
             {"role": "user", "content": user_text}
         ])
-        voice_model = "uz-UZ-MadinaNeural"
-        if any(word in user_text.lower() for word in ['hello', 'what', 'is', 'your', 'name']):
-            voice_model = "en-US-EmmaNeural"
-            
-        reply_voice_path = f"static/reply_{message.voice.file_id}.mp3"
-        communicate = edge_tts.Communicate(ai_response, voice_model)
-        await communicate.save(reply_voice_path)
-        await message.answer_voice(types.FSInputFile(reply_voice_path), caption=f"✍️ <i>Siz aytdingiz: {user_text}</i>", parse_mode="HTML")
-        if os.path.exists(reply_voice_path): 
-            try: os.remove(reply_voice_path)
-            except: pass
+        
+        res_filename = f"static/res_{uuid.uuid4().hex}.mp3"
+        communicate = edge_tts.Communicate(ai_response, "en-US-EmmaNeural")
+        await communicate.save(res_filename)
+        
+        return web.json_response({
+            "status": "success",
+            "text": ai_response,
+            "audio_url": f"{WEBHOOK_URL}/{res_filename}"
+        })
     except Exception as e:
-        await message.answer(f"Xatolik: {str(e)}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
 
-# ==================== WEBHOOK VA STARTUP ====================
+# ==================== 6. ENGINE VA WEBHOOK ISHGA TUSHIRISH ====================
+
 async def handle_webhook(request):
-    url = str(request.url)
-    index = url.rfind("/webhook")
-    if index != -1:
-        request_data = await request.json()
-        update = types.Update(**request_data)
-        await dp.feed_update(bot, update)
+    request_data = await request.json()
+    update = types.Update(**request_data)
+    await dp.feed_update(bot, update)
     return web.Response(text="OK")
 
 async def on_startup(app):
     await bot.set_webhook(f"{WEBHOOK_URL}/webhook")
-    bot_commands = [
-        types.BotCommand(command="start", description="Botni qayta ishga tushirish 🚀"),
-        types.BotCommand(command="mock_ielts", description="IELTS Mock Exam (Full Part 1, 2, 3) 🏆"),
-        types.BotCommand(command="practice", description="Erkin mavzularda ovozli suhbat mashqi 🗣")
-    ]
-    await bot.set_my_commands(bot_commands)
 
 def main():
     app = web.Application()
-    app.router.add_post("/webhook", handle_webhook)
+    app.router.add_get('/', serve_index)
+    app.router.add_post('/api/voice-call', handle_voice_call_api)
+    app.router.add_post('/webhook', handle_webhook)
+    app.router.add_static('/static/', path='static', name='static')
     app.on_startup.append(on_startup)
     web.run_app(app, host="0.0.0.0", port=PORT)
 
