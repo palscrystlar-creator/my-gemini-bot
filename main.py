@@ -3,7 +3,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiohttp import web
 from handlers import router # handlers.py dan router ni olamiz
-
+from aiogram.types import BotCommand
 BOT_TOKEN = "8799568905:AAGY-PYkbve9LkNp2Fy922FAibTopmomu5s"
 WEBHOOK_URL = "https://my-gemini-bot-1-14qh.onrender.com"
 
@@ -25,4 +25,16 @@ app.on_startup.append(on_startup)
 
 if __name__ == "__main__":
     web.run_app(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
-# Server qismi...
+async def set_commands(bot: Bot):
+    commands = [
+        BotCommand(command="start", description="Botni ishga tushirish 👋"),
+        BotCommand(command="mock_ielts", description="IELTS Mock Test 🏆"),
+        BotCommand(command="story", description="Hikoya yaratish 📖"),
+        BotCommand(command="math", description="Matematika yechish 🧮")
+    ]
+    await bot.set_my_commands(commands)
+
+# Buni main.py dagi on_startup funksiyasiga qo'shasiz:
+async def on_startup(app):
+    await bot.set_webhook(f"{WEBHOOK_URL}/webhook")
+    await set_commands(bot) # Mana shu qator menyuni menyu qiladi
