@@ -375,13 +375,14 @@ async def handle_normal_voice(message: types.Message):
         await message.answer(f"Xatolik: {str(e)}")
 
 async def handle_webhook(request):
-    url = str(request.url)
-    index = url.rfind("/webhook")
-    if index != -1:
+    try:
         request_data = await request.json()
         update = types.Update(**request_data)
         await dp.feed_update(bot, update)
-    return web.Response(text="OK")
+        return web.Response(text="OK")
+    except Exception as e:
+        print(f"Webhook xatosi: {e}")
+        return web.Response(text="Error", status=500)
 
 async def on_startup(app):
     await bot.set_webhook(f"{WEBHOOK_URL}/webhook")
