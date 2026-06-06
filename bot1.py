@@ -144,12 +144,24 @@ async def stop_cmd(message: types.Message, state: FSMContext):
 @dp.message(Command("mock_ielts"))
 async def start_ielts_mock(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer("🏆 <b>IELTS Speaking Mock Test boshlandi!</b>\nSavollarga faqat <b>OVOZLI XABAR</b> orqali javob bering.\n\n<i>🎬 Part 1 boshlanmoqda...</i>", parse_mode="HTML")
+    
+    # Savollar ro'yxatini tasodifiy tanlash uchun
+    topics = [
+        "hometown", "your current studies", "your daily work routine", 
+        "your favorite leisure activities", "the importance of technology in your life"
+    ]
+    selected_topic = random.choice(topics)
+    
+    await message.answer("🏆 <b>IELTS Speaking Mock Test boshlandi!</b>\nSavollarga faqat <b>OVOZLI XABAR</b> orqali javob bering.", parse_mode="HTML")
+    
+    # Endi prompt har safar o'zgaradi
+    dynamic_prompt = f"Act as an examiner. Ask a natural IELTS Part 1 introductory question about {selected_topic}. Do not use standard templates, be original."
     
     q1 = await groq_chat_completion([
         {"role": "system", "content": EXAMINER_PROMPT}, 
-        {"role": "user", "content": "Act as an examiner. Ask a standard IELTS Part 1 introductory question (about home, work, studies, or hometown). Only output the question."}
+        {"role": "user", "content": dynamic_prompt}
     ])
+    
     await message.answer(f"🗣 <b>Examiner (Part 1 - Q1):</b>\n{q1}")
     await send_examiner_voice(message, q1)
     await state.update_data(p1_q1=q1, history=[])
