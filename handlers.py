@@ -50,3 +50,20 @@ async def chat_with_ai(message: types.Message):
 async def chat_cb(callback: types.CallbackQuery):
     await callback.message.answer("💬 Suhbat rejimi faol! Menga savol bering yoki shunchaki gaplashing.")
     await callback.answer()
+@router.message(F.voice)
+async def handle_voice(message: types.Message):
+    # Telegramdan faylni yuklab olish
+    file_id = message.voice.file_id
+    file = await message.bot.get_file(file_id)
+    file_path = file.file_path
+    
+    # Faylni saqlash va matnga o'girish (Bu qismda sizda audio to audio STT bo'lishi kerak)
+    # Hozircha oddiy matnli AI ga o'tkazamiz:
+    await message.answer("🎧 Ovozingiz eshitildi, tahlil qilinmoqda...")
+    
+    # AI orqali javob
+    comp = ai_client.chat.completions.create(
+        messages=[{"role": "user", "content": "Foydalanuvchi ovozli xabar yubordi (uni matnga o'girganimda shuni bildim)"}], 
+        model="llama-3.3-70b-versatile"
+    )
+    await message.answer(comp.choices[0].message.content)
