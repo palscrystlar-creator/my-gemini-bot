@@ -46,7 +46,7 @@
             z-index: 1;
         }
         @keyframes pulse-animation {
-            0% { transform: scale(1); opacity: 1; }
+            0 { transform: scale(1); opacity: 1; }
             100% { transform: scale(1.6); opacity: 0; }
         }
         .status {
@@ -54,6 +54,8 @@
             font-weight: bold;
             margin-bottom: 5px;
             color: #00d2ff;
+            text-align: center;
+            padding: 0 20px;
         }
         .timer {
             font-size: 14px;
@@ -77,8 +79,9 @@
             transition: 0.3s;
         }
         .btn-mic { background-color: #28a745; color: white; }
-        .btn-mic.recording { background-color: #ffc107; animation: bounce 1s infinite alternate; }
-        .btn-end { background-color: #dc3545; color: white; }
+        .btn-mic.recording { background-color: #dc3545; animation: bounce 1s infinite alternate; }
+        .btn-mic:disabled { background-color: #555; cursor: not-allowed; }
+        .btn-end { background-color: #333; color: white; }
         @keyframes bounce {
             from { transform: translateY(0); }
             to { transform: translateY(-5px); }
@@ -102,53 +105,57 @@
 
     <script>
         const tg = window.Telegram.WebApp;
-        tg.expand(); // Oynani to'liq ekranga ochish
+        tg.expand(); 
 
-        let isCalling = false;
+        let isRecording = false;
         let mediaRecorder;
         let audioChunks = [];
         let timerInterval;
         let seconds = 0;
+        let localStream;
 
         function toggleCall() {
             const micBtn = document.getElementById('micBtn');
             const statusLabel = document.getElementById('statusLabel');
             const pulseRing = document.getElementById('pulseRing');
 
-            if (!isCalling) {
-                // Qo'ng'iroqni boshlash
+            if (!isRecording) {
+                // Ovoz yozishni boshlash
+                audioChunks = []; // Har safar boshlashda massivni tozalaymiz
                 navigator.mediaDevices.getUserMedia({ audio: true })
                     .then(stream => {
-                        isCalling = true;
-                        micBtn.innerText = "🎤";
+                        localStream = stream;
+                        isRecording = true;
+                        micBtn.innerText = "🛑";
                         micBtn.classList.add('recording');
-                        statusLabel.innerText = "Listening...";
+                        statusLabel.innerText = "Listening... Speak now.";
                         pulseRing.style.display = "block";
                         
-                        // Timerni boshlash
                         startTimer();
 
                         mediaRecorder = new MediaRecorder(stream);
                         mediaRecorder.ondataavailable = event => {
-                            audioChunks.push(event.data);
+                            if (event.data.size > 0) {
+                                audioChunks.push(event.data);
+                            }
                         };
 
                         mediaRecorder.onstop = () => {
-                            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                             sendAudioToServer(audioBlob);
-                            audioChunks = [];
                         };
 
-                        mediaRecorder.start();
+                        mediaRecorder.start(1000); // Har 1 soniyada ma'lumot yig'adi
                     })
                     .catch(err => {
                         alert("Mikrofonga ruxsat berilmadi!");
                         console.error(err);
                     });
             } else {
-                // Gapirishni tugatib, AI javobini kutish
-                isCalling = false;
-                micBtn.innerText = "📞";
+                // Gapirishni tugatish va yozishni to'xtatish
+                isRecording = false;
+                micBtn.innerText = "⌛";
+                micBtn.disabled = true; // AI o'ylayotganda tugmani bloklaymiz
                 micBtn.classList.remove('recording');
                 statusLabel.innerText = "AI is thinking...";
                 pulseRing.style.display = "none";
@@ -157,11 +164,15 @@
                 if (mediaRecorder && mediaRecorder.state !== "inactive") {
                     mediaRecorder.stop();
                 }
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop()); // Mikrofonni o'chirish
+                }
             }
         }
 
         function startTimer() {
             seconds = 0;
+            clearInterval(timerInterval);
             timerInterval = setInterval(() => {
                 seconds++;
                 let mins = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -176,30 +187,48 @@
 
         function sendAudioToServer(blob) {
             const formData = new FormData();
-            formData.append('audio', blob);
+            formData.append('audio', blob, 'user_voice.webm');
             formData.append('user_id', tg.initDataUnsafe.user?.id || "unknown");
 
             fetch('/api/voice-call', {
                 method: 'POST',
                 body: formData
             })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error("Server xatosi");
+                return res.json();
+            })
             .then(data => {
-                document.getElementById('statusLabel').innerText = "AI Speaking...";
-                // AI dan kelgan ovozni telefonda yangratish
-                const audio = new Audio(data.audio_url);
-                audio.play();
-                audio.onended = () => {
-                    document.getElementById('statusLabel').innerText = "AI Finished. Tap Mic to respond.";
-                };
+                if(data.status === "success") {
+                    document.getElementById('statusLabel').innerText = "🤖 AI Speaking...";
+                    const audio = new Audio(data.audio_url);
+                    audio.play();
+                    
+                    audio.onended = () => {
+                        // AI gapirib bo'lgach hamma narsani joyiga qaytaramiz
+                        const micBtn = document.getElementById('micBtn');
+                        micBtn.disabled = false;
+                        micBtn.innerText = "📞";
+                        document.getElementById('statusLabel').innerText = "Tap Mic to respond again.";
+                        document.getElementById('timerLabel').innerText = "00:00";
+                    };
+                } else {
+                    throw new Error(data.message);
+                }
             })
             .catch(err => {
-                document.getElementById('statusLabel').innerText = "Xatolik yuz berdi.";
+                const micBtn = document.getElementById('micBtn');
+                micBtn.disabled = false;
+                micBtn.innerText = "📞";
+                document.getElementById('statusLabel').innerText = "Error. Try again.";
                 console.error(err);
             });
         }
 
         function closeApp() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
             tg.close();
         }
     </script>
