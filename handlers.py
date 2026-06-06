@@ -8,6 +8,7 @@ ai_client = Groq(api_key="gsk_0syuu6iyjwRVizbiteqLWGdyb3FY8tq9Ei3yfUmypwuhPZpFju
 
 def get_main_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💬 Suhbatlashish", callback_data="start_chat")], # Yangi tugma
         [InlineKeyboardButton(text="📖 Ovozli hikoya", callback_data="start_story")],
         [InlineKeyboardButton(text="🧮 Matematika", callback_data="start_math")]
     ])
