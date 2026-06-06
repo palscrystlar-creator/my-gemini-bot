@@ -74,22 +74,24 @@ async def start_command(message: types.Message):
 @dp.message(Command("mock_ielts"))
 async def start_ielts_mock(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer("🎬 <b>Welcome to the Full IELTS Speaking Mock Test!</b>\n"
-                         "This test consists of Part 1, Part 2, and Part 3.\n"
-                         "Please reply to every question using <b>VOICE MESSAGES</b>.🎙\n\n"
-                         "<i>Starting Part 1...</i>", parse_mode="HTML")
+    
+    # Yangi savolni tasodifiy tanlash uchun promptni o'zgartiramiz
     try:
         completion = ai_client.chat.completions.create(
             messages=[
                 {"role": "system", "content": EXAMINER_PROMPT},
-                {"role": "user", "content": "Generate a common IELTS Speaking Part 1 topic question. Ask just one question."}
+                {"role": "user", "content": "Generate a unique IELTS Speaking Part 1 introduction question. Make it different every time."}
             ],
             model="llama-3.3-70b-versatile",
         )
         q1 = completion.choices[0].message.content
+        
+        await message.answer("🎬 <b>Welcome to the Full IELTS Speaking Mock Test!</b>", parse_mode="HTML")
         await message.answer(f"🗣 <b>Part 1 - Question 1:</b>\n{q1}", parse_mode="HTML")
         await send_examiner_voice(message, q1)
+        
         await state.set_state(IELTSMockState.part1_q1)
+        # History ni bo'sh qilib yaratamiz
         await state.update_data(p1_q1=q1, history=[])
     except Exception as e:
         await message.answer(f"Xatolik: {str(e)}")
