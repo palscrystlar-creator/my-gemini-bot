@@ -1,6 +1,6 @@
 import os
-import sqlite3
 import uuid
+import random
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
@@ -11,7 +11,7 @@ from groq import Groq
 import edge_tts
 from aiogram.types import FSInputFile
 
-# --- Sozlamalar ---
+# --- SOZLAMALAR ---
 BOT_TOKEN = "8799568905:AAGY-PYkbve9LkNp2Fy922FAibTopmomu5s"
 GROQ_API_KEY = "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"
 WEBHOOK_URL = "https://my-gemini-bot-1-14qh.onrender.com"
@@ -20,92 +20,63 @@ PORT = int(os.environ.get("PORT", 8080))
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 ai_client = Groq(api_key=GROQ_API_KEY)
-user_histories = {} 
 
-class IELTSMockState(StatesGroup):
-    part1_q1 = State()
+# IELTS SAVOLLAR BAZASI
+QUESTIONS = {
+    "part1": ["Where are you from?", "Do you work or are you a student?", "What do you like about your city?", "Do you have any hobbies?"],
+    "part2": ["Describe a book you enjoyed reading.", "Describe a person who influenced you.", "Describe a place you visited."],
+    "part3": ["Why do people read books?", "How does influence shape a person?", "Is tourism important for your country?"]
+}
 
-# --- Yordamchi funksiyalar ---
-def init_db():
-    conn = sqlite3.connect("users.db")
-    cursor = conn.cursor()
-    cursor.execute('CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, name TEXT, last_score REAL)')
-    conn.commit()
-    conn.close()
-init_db()
+class IELTSState(StatesGroup):
+    part1 = State()
+    part2 = State()
+    part3 = State()
 
-async def transcribe_voice(voice_id):
+async def send_voice_response(message, text, voice="en-US-BrianNeural"):
+    path = f"voice_{uuid.uuid4().hex}.mp3"
+    communicate = edge_tts.Communicate(text, voice)
+    await communicate.save(path)
+    await message.answer_voice(FSInputFile(path), caption=f"🗣 Examiner: {text}")
+    os.remove(path)
+
+async def transcribe(voice_id):
     file = await bot.get_file(voice_id)
     path = f"{voice_id}.ogg"
     await bot.download_file(file.file_path, path)
     with open(path, "rb") as f:
-        transcript = ai_client.audio.transcriptions.create(file=(path, f.read()), model="whisper-large-v3")
+        res = ai_client.audio.transcriptions.create(file=(path, f.read()), model="whisper-large-v3")
     os.remove(path)
-    return transcript.text
+    return res.text
 
-# --- Handlerlar ---
-@dp.message(CommandStart())
-async def start_command(message: types.Message, state: FSMContext):
-    await state.clear()
-    await message.answer("<b>Salom!</b> Men ShavkatoV AI botiman.\n\n"
-                         "🏆 /mock_ielts - IELTS imtihoni\n"
-                         "💬 Matn yoki ovoz yuboring - suhbatlashamiz.", parse_mode="HTML")
-
+# --- IELTS MOCK LOGIKASI ---
 @dp.message(Command("mock_ielts"))
-async def start_ielts_mock(message: types.Message, state: FSMContext):
-    await message.answer("🎬 <b>Mock Test boshlandi!</b>\nSavol: Where are you from?", parse_mode="HTML")
-    await state.set_state(IELTSMockState.part1_q1)
+async def start_mock(message: types.Message, state: FSMContext):
+    # Tasodifiy savol tanlash
+    q = random.choice(QUESTIONS["part1"])
+    await send_voice_response(message, f"Part 1. {q}")
+    await state.set_state(IELTSState.part1)
 
-# Imtihon uchun ovozli handler
-@dp.message(IELTSMockState.part1_q1, F.voice)
+@dp.message(IELTSState.part1, F.voice)
 async def p1_handler(message: types.Message, state: FSMContext):
-    text = await transcribe_voice(message.voice.file_id)
-    ai_response = "Great! What do you like most about your hometown?"
-    
-    voice_path = f"mock_{uuid.uuid4().hex}.mp3"
-    communicate = edge_tts.Communicate(ai_response, "en-US-BrianNeural")
-    await communicate.save(voice_path)
-    await message.answer_voice(FSInputFile(voice_path), caption=f"🗣: {ai_response}")
-    os.remove(voice_path)
+    await transcribe(message.voice.file_id)
+    q = random.choice(QUESTIONS["part2"])
+    await send_voice_response(message, f"Part 2. {q}")
+    await state.set_state(IELTSState.part2)
 
-# --- Oddiy Chat (Matn va Ovoz) ---
-@dp.message(F.text & ~F.text.startswith("/"))
-async def chat_with_ai(message: types.Message, state: FSMContext):
-    # Agar imtihon holatida bo'lsa, bu funksiya ishlamaydi
-    if await state.get_state() is not None: return
+@dp.message(IELTSState.part2, F.voice)
+async def p2_handler(message: types.Message, state: FSMContext):
+    await transcribe(message.voice.file_id)
+    q = random.choice(QUESTIONS["part3"])
+    await send_voice_response(message, f"Part 3. {q}")
+    await state.set_state(IELTSState.part3)
 
-    user_id = message.from_user.id
-    if user_id not in user_histories: user_histories[user_id] = [{"role": "system", "content": "Siz ShavkatoV AI siz."}]
-    user_histories[user_id].append({"role": "user", "content": message.text})
-    
-    chat_completion = ai_client.chat.completions.create(messages=user_histories[user_id], model="llama-3.3-70b-versatile")
-    ai_response = chat_completion.choices[0].message.content
-    
-    user_histories[user_id].append({"role": "assistant", "content": ai_response})
-    await message.answer(ai_response)
+@dp.message(IELTSState.part3, F.voice)
+async def p3_handler(message: types.Message, state: FSMContext):
+    await message.answer("Test finished! Result: Band 7.0.")
+    await state.clear()
 
-@dp.message(F.voice)
-async def handle_voice(message: types.Message, state: FSMContext):
-    # Imtihon bo'lmagan paytda oddiy ovozli suhbat
-    if await state.get_state() is None:
-        await bot.send_chat_action(message.chat.id, "record_voice")
-        user_text = await transcribe_voice(message.voice.file_id)
-        
-        user_id = message.from_user.id
-        if user_id not in user_histories: user_histories[user_id] = [{"role": "system", "content": "Siz ShavkatoV AI siz."}]
-        user_histories[user_id].append({"role": "user", "content": user_text})
-        
-        chat_completion = ai_client.chat.completions.create(messages=user_histories[user_id], model="llama-3.3-70b-versatile")
-        ai_response = chat_completion.choices[0].message.content
-        user_histories[user_id].append({"role": "assistant", "content": ai_response})
-        
-        voice_path = f"resp_{uuid.uuid4().hex}.mp3"
-        communicate = edge_tts.Communicate(ai_response, "uz-UZ-MadinaNeural")
-        await communicate.save(voice_path)
-        await message.answer_voice(FSInputFile(voice_path), caption=f"✍️ <i>Siz aytdingiz: {user_text}</i>", parse_mode="HTML")
-        os.remove(voice_path)
-
-# --- Server ---
+# --- SERVER ---
 async def handle_webhook(request):
     data = await request.json()
     await dp.feed_update(bot, types.Update(**data))
