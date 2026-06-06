@@ -17,11 +17,17 @@ def get_main_menu():
 # 2. START KOMANDASI (TUGMALAR BILAN)
 @router.message(CommandStart())
 async def start_cmd(message: types.Message):
-    # reply_markup orqali tugmalarni yuboramiz
-    await message.answer(
-        "Salom! Men sizning yordamchingizman. Quyidagi menyudan kerakli bo'limni tanlang:", 
-        reply_markup=get_main_menu()
+    # Bu yerda stikerlar va menyu birlashtirilgan
+    text = (
+        "<b>Assalomu alaykum, aziz foydalanuvchi!</b> 👋\n\n"
+        "Men sizning shaxsiy AI yordamchingizman. 🤖\n"
+        "Quyidagi imkoniyatlardan foydalanishingiz mumkin:\n\n"
+        "🏆 <b>IELTS Mock</b> - Ovozli imtihon topshiring\n"
+        "📖 <b>Hikoyalar</b> - AI yordamida audio-hikoyalar tinglang\n"
+        "🧮 <b>Matematika</b> - Misollarni yechish va tushunish\n\n"
+        "<i>Quyidagi tugmalardan birini tanlang:</i> 👇"
     )
+    await message.answer(text, reply_markup=get_main_menu(), parse_mode="HTML")
 
 # 3. TUGMALAR ISHLASHI UCHUN CALLBACKLAR
 @router.callback_query(F.data == "start_mock")
