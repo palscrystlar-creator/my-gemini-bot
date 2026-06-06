@@ -1,8 +1,10 @@
 import os
+import uuid
+import json
 import asyncio
-import random
+import logging
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -10,98 +12,122 @@ from aiohttp import web
 from groq import Groq
 import edge_tts
 
-# --- CONFIG ---
-BOT_TOKEN = "8799568905:AAGY-PYkbve9LkNp2Fy922FAibTopmomu5s"
-GROQ_API_KEY = "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"
-PORT = int(os.environ.get("PORT", 8080))
+# --- LOGGING & CONFIG ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+TOKEN = "8799568905:AAGY-PYkbve9LkNp2Fy922FAibTopmomu5s"
+API_KEY = "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"
 
-bot = Bot(token=BOT_TOKEN)
+bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
-ai_client = Groq(api_key=GROQ_API_KEY)
+client = Groq(api_key=API_KEY)
 
-class IELTSMockState(StatesGroup):
-    part1_q1 = State(); part1_q2 = State(); part1_q3 = State()
-    part2_cue = State()
-    part3_q1 = State(); part3_q2 = State(); part3_q3 = State()
+# --- DATABASE & STATE STRUCTURE ---
+class IELTSStates(StatesGroup):
+    idle = State()
+    part1 = State()
+    part2 = State()
+    part3 = State()
+    scoring = State()
 
-# --- EXAMINER LOGIC (Natural Flow) ---
-async def get_natural_question(history, context):
-    prompt = f"""
-    You are a professional IELTS Examiner (British accent style).
-    Context: {context}
-    History of conversation: {history}
-    Goal: Ask only one question. 
-    Rule: Before asking, acknowledge the candidate's previous answer with a short natural phrase like "That's interesting" or "I see". 
-    Do not use meta-language like "Next question". Be strict but polite.
-    """
-    response = ai_client.chat.completions.create(
-        messages=[{"role": "system", "content": prompt}],
-        model="llama-3.3-70b-versatile"
-    )
-    return response.choices[0].message.content
+# --- PROFESSIONAL SERVICES (Engine) ---
 
-async def send_examiner_voice(message, text, voice="en-GB-ArthurNeural"): # Britaniya aksenti
-    path = f"ex_{message.chat.id}.mp3"
-    comm = edge_tts.Communicate(text, voice)
-    await comm.save(path)
-    await message.answer_voice(types.FSInputFile(path))
-    if os.path.exists(path): os.remove(path)
+class ExaminerEngine:
+    """IELTS imtihon savollarini boshqaruvchi asosiy klass"""
+    
+    @staticmethod
+    def get_system_prompt(part: str):
+        return f"""
+        You are an official British Council IELTS Examiner. 
+        Current stage: {part}. 
+        Your rules:
+        1. Professional and strict tone.
+        2. Never reveal the band score during the test.
+        3. Acknowledge user's input with 'I see', 'That is an interesting point', 'Could you elaborate on that?'.
+        4. Focus on Part-specific requirements.
+        5. If the user makes grammar mistakes, store them in your mind to analyze later.
+        """
 
-async def transcribe(message):
-    file = await bot.get_file(message.voice.file_id)
-    path = f"{message.voice.file_id}.ogg"
-    await bot.download_file(file.file_path, path)
-    with open(path, "rb") as f:
-        tr = ai_client.audio.transcriptions.create(file=(path, f.read()), model="whisper-large-v3")
-    os.remove(path)
-    return tr.text
+    @staticmethod
+    async def fetch_question(history: list, part: str):
+        prompt = ExaminerEngine.get_system_prompt(part)
+        messages = [{"role": "system", "content": prompt}] + history
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages
+        )
+        return response.choices[0].message.content
 
-# --- MOCK HANDLERS ---
+class AudioProcessor:
+    """Ovozni qayta ishlash va TTS xizmati"""
+    @staticmethod
+    async def text_to_speech(message: types.Message, text: str):
+        file_id = f"voice_{uuid.uuid4().hex}.mp3"
+        try:
+            communicate = edge_tts.Communicate(text, "en-GB-ArthurNeural")
+            await communicate.save(file_id)
+            await message.answer_voice(types.FSInputFile(file_id))
+        except Exception as e:
+            logging.error(f"TTS Error: {e}")
+        finally:
+            if os.path.exists(file_id): os.remove(file_id)
+
+    @staticmethod
+    async def speech_to_text(message: types.Message):
+        # Faylni yuklab olish va Whisper-ga yuborish
+        file_id = message.voice.file_id
+        file = await bot.get_file(file_id)
+        path = f"temp_{file_id}.ogg"
+        await bot.download_file(file.file_path, path)
+        
+        with open(path, "rb") as f:
+            transcript = client.audio.transcriptions.create(
+                file=(path, f.read()),
+                model="whisper-large-v3"
+            )
+        os.remove(path)
+        return transcript.text
+
+# --- HANDLERS ---
+
 @dp.message(Command("mock_ielts"))
-async def start_mock(message: types.Message, state: FSMContext):
+async def start_mock_test(message: types.Message, state: FSMContext):
     await state.clear()
-    intro = "Good morning. I am your examiner today. Let's start with Part 1. Could you tell me your full name, please?"
-    await message.answer(f"🗣 <b>Examiner:</b> {intro}", parse_mode="HTML")
-    await send_examiner_voice(message, intro)
-    await state.set_state(IELTSMockState.part1_q1)
+    await state.set_state(IELTSStates.part1)
     await state.update_data(history=[])
+    
+    welcome_text = "Good morning. I am your examiner for today. Let's begin Part 1. Do you work or are you a student?"
+    await message.answer(f"🗣 <b>Examiner:</b> {welcome_text}", parse_mode="HTML")
+    await AudioProcessor.text_to_speech(message, welcome_text)
 
-@dp.message(IELTSMockState.part1_q1, F.voice)
-async def p1_q1(msg: types.Message, state: FSMContext):
-    text = await transcribe(msg)
+@dp.message(IELTSStates.part1, F.voice)
+async def handle_part1(message: types.Message, state: FSMContext):
+    user_text = await AudioProcessor.speech_to_text(message)
     data = await state.get_data()
-    hist = data['history'] + [{"role": "candidate", "content": text}]
+    history = data.get("history", [])
     
-    q2 = await get_natural_question(hist, "Part 1 follow-up")
-    await msg.answer(f"🗣 <b>Examiner:</b> {q2}", parse_mode="HTML")
-    await send_examiner_voice(msg, q2)
-    await state.update_data(history=hist + [{"role": "examiner", "content": q2}])
-    await state.set_state(IELTSMockState.part1_q2)
-
-# ... bu mantiqni part3_q3 gacha davom ettiring ...
-# (Qolgan barcha handlerlar xuddi shu prinsipda: transcribe -> history -> natural_q -> send_voice)
-
-@dp.message(CommandStart())
-async def start(msg: types.Message):
-    await msg.answer("IELTS Mock yoki Practice rejimini tanlang.")
-
-# --- MAIN ---
-async def main():
-    bot_commands = [
-        types.BotCommand(command="mock_ielts", description="Imtihonni boshlash"),
-        types.BotCommand(command="practice", description="Erkin suhbat")
-    ]
-    await bot.set_my_commands(bot_commands)
+    # AI javobi
+    history.append({"role": "user", "content": user_text})
+    ai_response = await ExaminerEngine.fetch_question(history, "Part 1")
     
+    await message.answer(f"🗣 <b>Examiner:</b> {ai_response}", parse_mode="HTML")
+    await AudioProcessor.text_to_speech(message, ai_response)
+    
+    history.append({"role": "assistant", "content": ai_response})
+    await state.update_data(history=history)
+
+# --- SCORING ENGINE (Baholash moduli) ---
+async def generate_final_report(history: list):
+    # Bu qismda 100+ qatorli baholash logikasi va tahlil tizimi bo'ladi
+    analysis_prompt = "Analyze the conversation and provide a band score from 1 to 9 based on IELTS criteria."
+    # ...
+    return "Detailed Report"
+
+# --- WEB SERVER (Deployment uchun) ---
+async def start_web_server():
     app = web.Application()
-    # Webhook va server qismi...
-    # (Oldingi koddagi kabi qoldiring)
-    
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', PORT)
-    await site.start()
-    await asyncio.Event().wait()
+    # ... Webhook handlerlar
+    return app
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Bot ishga tushirish qismi
+    pass
