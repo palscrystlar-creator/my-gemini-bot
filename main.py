@@ -12,7 +12,6 @@ dp.include_router(router)
 async def set_commands():
     await bot.set_my_commands([
         BotCommand(command="start", description="Botni ishga tushirish"),
-        BotCommand(command="mock_ielts", description="IELTS Mock"),
         BotCommand(command="story", description="Ovozli hikoya"),
         BotCommand(command="math", description="Matematika")
     ])
