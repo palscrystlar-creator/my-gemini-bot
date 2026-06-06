@@ -11,14 +11,6 @@ from aiogram import types
 # Router yaratamiz
 router = Router()
 ai_client = Groq(api_key="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")
-
-# Savollar bazasi (boshqa o'zgaruvchilar ham shu yerda bo'ladi)
-QUESTIONS = {
-    "part1": ["random?"],
-    "part2": ["Describe a book you enjoyed."],
-    "part3": ["Why do people read books?"]
-}
-
 # Yordamchi funksiya
 async def send_voice_response(message, text, voice="en-US-BrianNeural"):
     path = f"voice_{uuid.uuid4().hex}.mp3"
