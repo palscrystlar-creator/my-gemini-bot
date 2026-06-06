@@ -44,7 +44,7 @@ EXAMINER_PROMPT = (
 
 # Matnni ovozga o'giriuvchi yordamchi funksiya
 async def send_examiner_voice(message: types.Message, text: str, voice="en-US-BrianNeural"):
-    reply_voice_path = f"examiner_{message.chat.id}.mp3"
+    reply_voice_path = f"examiner_{message.chat.id}_{uuid.uuid4().hex}.mp3"
     try:
         communicate = edge_tts.Communicate(text, voice)
         await communicate.save(reply_voice_path)
