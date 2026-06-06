@@ -7,7 +7,7 @@ from aiogram.types import FSInputFile
 import edge_tts
 import os
 from groq import Groq
-
+from aiogram import types
 # Router yaratamiz
 router = Router()
 ai_client = Groq(api_key="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")
