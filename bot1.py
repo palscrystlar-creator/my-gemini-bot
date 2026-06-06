@@ -265,7 +265,7 @@ async def p3_q2_handler(message: types.Message, state: FSMContext):
 @dp.message(IELTSMockState.part3_q3, F.voice)
 async def p3_q3_handler(message: types.Message, state: FSMContext):
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    await message.answer("🏁 <i>That is the end of the Speaking test. Please wait while I analyze your performance and prepare your report...</i>")
+    await message.answer("🏁 <i>Test tugadi! Tahlil qilinmoqda, iltimos kuting...</i>")
     
     text = await transcribe_voice(message)
     if not text: return
@@ -276,33 +276,51 @@ async def p3_q3_handler(message: types.Message, state: FSMContext):
     history.append({"role": "candidate", "content": text})
     
     try:
-        # Butun imtihon tarixini AI ga yuboramiz va to'liq o'zbekcha feedback olamiz
         report_prompt = (
-            f"You are a senior IELTS examiner. Analyze the following complete interview history:\n{history}\n\n"
-            f"Provide a comprehensive, structured feedback report written in O'zbek tilida (Uzbek).\n"
-            f"Structure the report as follows:\n"
-            f"1. Overall Estimated Band Score (e.g., 6.5)\n"
-            f"2. Fluency and Coherence (Tahlil va kamchiliklar)\n"
-            f"3. Lexical Resource (So'z boyligi tahlili)\n"
-            f"4. Grammatical Range and Accuracy (Grammatika va xatolar)\n"
-            f"5. Key Corrections (Foydalanuvchi aytgan noto'g'ri gaplarni to'g'rilab ko'rsating)\n"
-            f"6. Tips to improve (Rivojlantirish uchun maslahatlar)"
+            f"Analyze this IELTS interview: {history}\n\n"
+            f"Generate a detailed report in Uzbek. You MUST strictly separate the sections using '---' divider. "
+            f"Format exactly like this:\n"
+            f"🏆 **OFFICIAL IELTS SPEAKING REPORT** 🏆\n"
+            f"**Umumiy Baholash Balli:** [Score]\n"
+            f"---"
+            f"📈 **1. Fluency and Coherence:** [Text]\n"
+            f"---"
+            f"🔤 **2. Lexical Resource:** [Text]\n"
+            f"---"
+            f"⚖️ **3. Grammatical Range:** [Text]\n"
+            f"---"
+            f"🛠️ **4. Key Corrections:** [Text]\n"
+            f"---"
+            f"💡 **5. Tips to Improve:** [Text]"
         )
         
         completion = ai_client.chat.completions.create(
             messages=[{"role": "user", "content": report_prompt}],
             model="llama-3.3-70b-versatile",
         )
-        report = completion.choices[0].message.content
+        report_content = completion.choices[0].message.content
         
-        await message.answer(f"📊 <b>OFFICIAL IELTS SPEAKING MOCK REPORT</b> 📊\n\n{report}")
-        await send_examiner_voice(message, "Thank you very much. Your full speaking test report is now ready on your screen. Good luck with your studies!", voice="en-US-EmmaNeural")
+        sections = report_content.split("---")
         
+        await message.answer("📊 <b>SIZNING TO'LIQ IELTS MOCK HISOBOTINGIZ:</b>\n\n(Har bir bo'lim matni ostida uning o'zbekcha ovozli audiosi ham taqdim etiladi 👇)")
+        
+        for index, section in enumerate(sections):
+            clean_section = section.strip()
+            if clean_section:
+                await message.answer(clean_section)
+                
+                voice_path = f"report_part_{index}_{message.chat.id}.mp3"
+                communicate = edge_tts.Communicate(clean_section.replace("**", "").replace("*", ""), "uz-UZ-MadinaNeural")
+                await communicate.save(voice_path)
+                
+                await message.answer_voice(types.FSInputFile(voice_path))
+                if os.path.exists(voice_path): os.remove(voice_path)
+                await asyncio.sleep(1)
+                
     except Exception as e:
-        await message.answer(f"Hisobot tayyorlashda xatolik: {str(e)}")
+        await message.answer(f"Hisobotda xatolik: {str(e)}")
     finally:
         await state.clear()
-
 # --- STANDART REJIM (MATNLI CHAT) ---
 @dp.message(F.text)
 async def chat_with_ai(message: types.Message):
