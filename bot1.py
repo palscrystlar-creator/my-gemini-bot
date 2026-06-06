@@ -102,18 +102,28 @@ async def send_examiner_voice(message: types.Message, text: str, voice="en-US-Br
             except: pass
 
 async def transcribe_voice(message: types.Message) -> str:
-    voice_id = message.voice.file_id
-    file = await bot.get_file(voice_id)
-    local_voice_path = f"static/{voice_id}.ogg"
+    # Fayl haqida ma'lumot olish
+    file_id = message.voice.file_id
+    file = await bot.get_file(file_id)
+    
+    # OGG formatini yuklab olish
+    local_voice_path = f"static/{file_id}.ogg"
     await bot.download_file(file.file_path, local_voice_path)
+    
+    # Fayl yuklanganligini tekshirish
+    if not os.path.exists(local_voice_path) or os.path.getsize(local_voice_path) == 0:
+        return ""
+
     try:
-        return await groq_transcribe_audio(local_voice_path)
-    except:
+        transcript = await groq_transcribe_audio(local_voice_path)
+        return transcript
+    except Exception as e:
+        print(f"Transcription error: {e}")
         return ""
     finally:
+        # Faylni o'chirish
         if os.path.exists(local_voice_path):
-            try: os.remove(local_voice_path)
-            except: pass
+            os.remove(local_voice_path)
 
 # ==================== 4. BOT HANDLERLARI ====================
 
