@@ -78,45 +78,32 @@ async def start_command(message: types.Message):
 @dp.message(Command("mock_ielts"))
 async def start_ielts_mock(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer("🎬 <b>Welcome to the Full IELTS Speaking Mock Test!</b>\n"
-                         "This test consists of Part 1, Part 2, and Part 3.\n"
-                         "Please reply to every question using <b>VOICE MESSAGES</b> (Ovozli xabar).🎙\n\n"
-                         "<i>Starting Part 1 (Introduction and Interview)...</i>", parse_mode="HTML")
+    
+    # AI har safar yangi savol topishi uchun "temperature" ni 1.0 (maksimal ijodkorlik) qilib belgilaymiz
+    # Shuningdek, modelga "har safar yangi savol" deb qat'iy buyruq beramiz.
     
     try:
         completion = ai_client.chat.completions.create(
             messages=[
-                {"role": "system", "content": EXAMINER_PROMPT},
-                {"role": "user", "content": "Generate a common IELTS Speaking Part 1 topic question. Ask just one question."}
+                {"role": "system", "content": EXAMINER_PROMPT}, 
+                {"role": "user", "content": "Generate a COMPLETELY NEW, RANDOM IELTS Speaking Part 1 question. Do not use previously asked topics."}
             ],
             model="llama-3.3-70b-versatile",
+            temperature=1.0  # <--- BU MUHIM: Bu AI ni "ijodkor" qiladi va savollarni xilma-xil qiladi
         )
         q1 = completion.choices[0].message.content
+        
+        await message.answer("🎬 <b>Welcome to the Full IELTS Speaking Mock Test!</b>\n\nStarting Part 1...", parse_mode="HTML")
         await message.answer(f"🗣 <b>Part 1 - Question 1:</b>\n{q1}", parse_mode="HTML")
+        
         await send_examiner_voice(message, q1)
         
-        await state.set_state(IELTSMockState.part1_q1)
+        # Holatni saqlash
         await state.update_data(p1_q1=q1, history=[])
+        await state.set_state(IELTSMockState.part1_q1)
+        
     except Exception as e:
         await message.answer(f"Xatolik: {str(e)}")
-
-async def transcribe_voice(message: types.Message) -> str:
-    voice_id = message.voice.file_id
-    file = await bot.get_file(voice_id)
-    local_voice_path = f"{voice_id}.ogg"
-    await bot.download_file(file.file_path, local_voice_path)
-    try:
-        with open(local_voice_path, "rb") as audio_file:
-            transcription = ai_client.audio.transcriptions.create(
-                file=(local_voice_path, audio_file.read()),
-                model="whisper-large-v3",
-            )
-        return transcription.text
-    except:
-        return ""
-    finally:
-        if os.path.exists(local_voice_path): os.remove(local_voice_path)
-
 @dp.message(IELTSMockState.part1_q1, F.voice)
 async def p1_q1_handler(message: types.Message, state: FSMContext):
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
