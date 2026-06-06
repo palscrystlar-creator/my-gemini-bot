@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
 from aiohttp import web
 from groq import Groq
-from gtts import gTTS
+import edge_tts  # Yangi professional ovoz kutubxonasi
 
 # Server va Bot sozlamalari
 BOT_TOKEN = "8799568905:AAGY-PYkbve9LkNp2Fy922FAibTopmomu5s"
@@ -47,17 +47,15 @@ async def start_command(message: types.Message):
     )
     await message.answer(welcome_text, parse_mode="HTML")
 
-# --- OVOZLI XABARLARNI QABUL QILISH VA JAVOB QAYTARISH ---
+# --- OVOZLI XABARLARNI QABUL QILISH ---
 @dp.message(F.voice)
 async def handle_voice_message(message: types.Message):
-    # Bot "ovoz yozib olyapti..." holatiga o'tadi
     await bot.send_chat_action(chat_id=message.chat.id, action="record_voice")
     
     voice_id = message.voice.file_id
     file = await bot.get_file(voice_id)
     file_path = file.file_path
     
-    # Ovozli faylni yuklab olamiz
     local_voice_path = f"{voice_id}.ogg"
     await bot.download_file(file_path, local_voice_path)
     
@@ -71,7 +69,7 @@ async def handle_voice_message(message: types.Message):
         
         user_text = transcription.text
         if not user_text:
-            await message.answer("Kechirasiz, ovozingizni eshita olmadim. Qaytadan yozib ko'ring.")
+            await message.answer("Kechirasiz, ovozingizni tushunolmadim. Qaytadan yozib ko'ring.")
             return
 
         # 2. Llama 3 AI modelidan javob olamiz
@@ -84,22 +82,22 @@ async def handle_voice_message(message: types.Message):
         )
         ai_response = chat_completion.choices[0].message.content
 
-        # 3. gTTS orqali AI javobini ovozli faylga (MP3) aylantiramiz
-        # Avtomatik tilni aniqlash (o'zbekcha bo'lsa 'uz', inglizcha bo'lsa 'en')
-        # gTTS o'zbekchani 'uz' kodi bilan qo'llab-quvvatlaydi
-        tts_lang = 'uz'
+        # 3. Edge-TTS orqali o'zbekcha ovoz hosil qilamiz
+        # Avtomatik tilni aniqlab mos ovozni tanlaymiz
+        voice_model = "uz-UZ-MadinaNeural" # O'zbekcha ovoz (Madina)
         if any(word in user_text.lower() for word in ['hello', 'what', 'is', 'your', 'name']):
-            tts_lang = 'en'
+            voice_model = "en-US-EmmaNeural" # Inglizcha ovoz (Emma)
             
-        tts = gTTS(text=ai_response, lang=tts_lang, slow=False)
         reply_voice_path = f"reply_{voice_id}.mp3"
-        tts.save(reply_voice_path)
+        
+        # Ovozli faylni yaratish
+        communicate = edge_tts.Communicate(ai_response, voice_model)
+        await communicate.save(reply_voice_path)
 
         # 4. Foydalanuvchiga ovozli javobni yuboramiz
         voice_file = types.FSInputFile(reply_voice_path)
         await message.answer_voice(voice_file, caption=f"✍️ <i>Siz aytdingiz: {user_text}</i>", parse_mode="HTML")
         
-        # Vaqtinchalik fayllarni tozalaymiz
         if os.path.exists(reply_voice_path): os.remove(reply_voice_path)
 
     except Exception as e:
@@ -108,7 +106,7 @@ async def handle_voice_message(message: types.Message):
     finally:
         if os.path.exists(local_voice_path): os.remove(local_voice_path)
 
-# --- MATNLI XABARLAR (Eski holatidek qoladi) ---
+# --- MATNLI XABARLAR ---
 @dp.message(F.text)
 async def chat_with_ai(message: types.Message):
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
