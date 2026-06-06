@@ -31,8 +31,10 @@ class IELTSMockState(StatesGroup):
     part3_q2 = State()
     part3_q3 = State()
 
-# Erkin Amaliyot (Practice) Holati
+# YANGILANGAN: Erkin Amaliyot (Practice) Bosqichlari
 class PracticeState(StatesGroup):
+    choosing_ai = State()
+    choosing_level = State()
     choosing_topic = State()
     speaking = State()
 
@@ -47,12 +49,7 @@ EXAMINER_PROMPT = (
     "Ask only ONE clear question at a time according to the part requirements. Do not output anything else."
 )
 
-PRACTICE_PROMPT = (
-    "You are a friendly English conversation partner. The user wants to practice speaking on a specific topic. "
-    "Respond warmly, keep your answers short (2-3 sentences), and ask ONE related interesting question to keep the conversation going."
-)
-
-# Ovoz yuborish funksiyasi
+# Ovoz yuborish umumiy funksiyasi
 async def send_examiner_voice(message: types.Message, text: str, voice="en-US-BrianNeural"):
     reply_voice_path = f"examiner_{message.chat.id}.mp3"
     try:
@@ -74,9 +71,9 @@ async def start_command(message: types.Message):
         f"🤖 Men <b>ShavkatoV AI</b> — sizning shaxsiy ingliz tili treneringizman.\n\n"
         f"💡 <b>`MUHIM YO'RIQNOMA:`</b>\n"
         f"Botda ikkita asosiy rejim mavjud:\n"
-        f"1️⃣ 🏆 <b>/mock_ielts</b> — To'liq 3 ta qismdan iborat IELTS imtihoni (Yakunda ball va tahlil beriladi).\n"
-        f"2️⃣ 🗣 <b>/practice</b> — Erkin mavzularda AI bilan do'stona ovozli muloqot (Kompleksni yo'qotish uchun).\n\n"
-        f"<i>Iltimos, bot savollariga faqat <b>OVOZLI XABAR (Voice)</b> orqali javob bering!</i>"
+        f"1️⃣ 🏆 <b>/mock_ielts</b> — To'liq 3 ta qismdan iborat IELTS imtihoni.\n"
+        f"2️⃣ 🗣 <b>/practice</b> — AI turi, darajangiz va mavzuni tanlab erkin muloqot qilish.\n\n"
+        f"<i>Iltimos, bot savollariga faqat <b>OVOZLI XABAR</b> orqali javob bering!</i>"
     )
     await message.answer(welcome_text, parse_mode="HTML")
 
@@ -99,50 +96,103 @@ async def transcribe_voice(message: types.Message) -> str:
             try: os.remove(local_voice_path)
             except: pass
 
-# ==================== PRACTICE (ERKIN SUHBAT) REJIMI ====================
+# ==================== MUKAMMAL PRACTICE REJIMI (AI -> LEVEL -> TOPIC) ====================
 
+# 1-QADAM: AI tanlash
 @dp.message(Command("practice"))
 async def start_practice(message: types.Message, state: FSMContext):
     await state.clear()
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
-        [types.InlineKeyboardButton(text="📱 Technology", callback_data="topic_Technology")],
-        [types.InlineKeyboardButton(text="✈️ Travel & Tourism", callback_data="topic_Travel")],
-        [types.InlineKeyboardButton(text="🍔 Food & Cooking", callback_data="topic_Food")],
-        [types.InlineKeyboardButton(text="🎓 Education", callback_data="topic_Education")],
+        [types.InlineKeyboardButton(text="👨‍💼 Mr. Brian (Strict & British)", callback_data="ai_en-GB-RyanNeural")],
+        [types.InlineKeyboardButton(text="👩‍💼 Miss. Emma (Friendly & American)", callback_data="ai_en-US-EmmaNeural")],
+        [types.InlineKeyboardButton(text="❌ Bekor qilish", callback_data="stop_practice")]
+    ])
+    await message.answer("🤖 <b>1-Bosqich: AI Suhbatdoshingizni tanlang:</b>\n"
+                         "Kim bilan suhbatlashishni xohlaysiz?", reply_markup=keyboard, parse_mode="HTML")
+    await state.set_state(PracticeState.choosing_ai)
+
+# 2-QADAM: Level (Daraja) tanlash
+@dp.callback_query(F.data.startswith("ai_"))
+async def ai_selected(callback: types.CallbackQuery, state: FSMContext):
+    selected_ai = callback.data.split("_")[1]
+    await state.update_data(chosen_ai=selected_ai)
+    await callback.answer()
+
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(text="🟢 Beginner (A1-A2) - Sodda gaplar", callback_data="lvl_Beginner")],
+        [types.InlineKeyboardButton(text="🟡 Intermediate (B1-B2) - O'rtacha", callback_data="lvl_Intermediate")],
+        [types.InlineKeyboardButton(text="🔴 Advanced (C1-C2) - Murakkab", callback_data="lvl_Advanced")],
+        [types.InlineKeyboardButton(text="❌ Bekor qilish", callback_data="stop_practice")]
+    ])
+    await callback.message.edit_text("📊 <b>2-Bosqich: Ingliz tili darajangizni tanlang:</b>\n"
+                                     "AI sizga qanday darajada savol bersin?", reply_markup=keyboard, parse_mode="HTML")
+    await state.set_state(PracticeState.choosing_level)
+
+# 3-QADAM: Mavzu (Topic) tanlash
+@dp.callback_query(F.data.startswith("lvl_"))
+async def level_selected(callback: types.CallbackQuery, state: FSMContext):
+    selected_level = callback.data.split("_")[1]
+    await state.update_data(chosen_level=selected_level)
+    await callback.answer()
+
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(text="📱 Technology & AI", callback_data="prctopic_Technology")],
+        [types.InlineKeyboardButton(text="✈️ Travel & Hobbies", callback_data="prctopic_Travel")],
+        [types.InlineKeyboardButton(text="🍔 Food & Daily Life", callback_data="prctopic_Food")],
+        [types.InlineKeyboardButton(text="🎓 Education & Career", callback_data="prctopic_Education")],
         [types.InlineKeyboardButton(text="❌ Suhbati yakunlash", callback_data="stop_practice")]
     ])
-    await message.answer("🗣 <b>Erkin suhbat rejimiga xush kelibsiz!</b>\n"
-                         "Qaysi mavzuda gaplashishni xohlaysiz? Quyidagilardan birini tanlang:", 
-                         reply_markup=keyboard, parse_mode="HTML")
+    await callback.message.edit_text("📱 <b>3-Bosqich: Suhbat mavzusini tanlang:</b>\n"
+                                     "Qaysi mavzu atrofida gaplashamiz?", reply_markup=keyboard, parse_mode="HTML")
     await state.set_state(PracticeState.choosing_topic)
 
-@dp.callback_query(F.data.startswith("topic_"))
+# 4-QADAM: Suhbatni boshlash
+@dp.callback_query(F.data.startswith("prctopic_"))
 async def topic_selected(callback: types.CallbackQuery, state: FSMContext):
     topic = callback.data.split("_")[1]
     await callback.answer()
-    await callback.message.answer(f"🚀 Siz <b>{topic}</b> mavzusini tanladingiz.\n"
-                                  f"Hozir men sizga birinchi savolni beraman. Menga faqat <b>ovozli xabar</b> yuborib javob bering. "
-                                  f"Suhbatni tugatmoqchi bo'lsangiz, shunchaki /stop deb yozing.")
+    
+    data = await state.get_data()
+    ai_voice = data.get("chosen_ai")
+    level = data.get("chosen_level")
+    
+    await callback.message.delete() # Eski xabarni o'chiramiz
+    await callback.message.answer(f"🚀 <b>Suhbat boshlandi!</b>\n"
+                                  f"👤 <b>AI Ovoz:</b> {'Brian' if 'Ryan' in ai_voice else 'Emma'}\n"
+                                  f"📊 <b>Daraja:</b> {level}\n"
+                                  f"📱 <b>Mavzu:</b> {topic}\n\n"
+                                  f"<i>Menga faqat <b>ovozli xabar</b> yuboring. Tugatish uchun /stop deb yozing.</i>", parse_mode="HTML")
+    
+    # AI uchun maxsus prompt tayyorlaymiz (Darajaga moslab)
+    custom_prompt = (
+        f"You are a friendly English conversation partner. The user wants to practice speaking on the topic '{topic}'. "
+        f"The user's English level is {level}. "
+        f"If level is Beginner, use very simple words and short sentences. If Advanced, use high-level vocabulary. "
+        f"Respond warmly, keep your response under 3 sentences, and ask ONE interesting question related to the topic."
+    )
+    
     try:
         completion = ai_client.chat.completions.create(
             messages=[
-                {"role": "system", "content": PRACTICE_PROMPT},
-                {"role": "user", "content": f"Start a friendly conversation about {topic}. Ask the first open-ended question."}
+                {"role": "system", "content": custom_prompt},
+                {"role": "user", "content": f"Start the conversation about {topic}."}
             ],
             model="llama-3.3-70b-versatile",
         )
         first_question = completion.choices[0].message.content
-        await callback.message.answer(f"💬 <b>AI:</b> {first_question}")
-        await send_examiner_voice(callback.message, first_question, voice="en-US-EmmaNeural")
         
-        await state.update_data(practice_history=[
-            {"role": "system", "content": PRACTICE_PROMPT},
+        await callback.message.answer(f"💬 <b>AI:</b> {first_question}")
+        await send_examiner_voice(callback.message, first_question, voice=ai_voice)
+        
+        await state.update_data(practice_prompt=custom_prompt, chosen_ai=ai_voice, practice_history=[
+            {"role": "system", "content": custom_prompt},
             {"role": "assistant", "content": first_question}
         ])
         await state.set_state(PracticeState.speaking)
     except Exception as e:
         await callback.message.answer(f"Xatolik: {str(e)}")
 
+# Suhbat davomida ovozli xabarlarni almashish
 @dp.message(PracticeState.speaking, F.voice)
 async def handle_practice_voice(message: types.Message, state: FSMContext):
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
@@ -153,6 +203,7 @@ async def handle_practice_voice(message: types.Message, state: FSMContext):
     
     data = await state.get_data()
     history = data.get("practice_history", [])
+    ai_voice = data.get("chosen_ai")
     history.append({"role": "user", "content": user_text})
     
     try:
@@ -161,8 +212,9 @@ async def handle_practice_voice(message: types.Message, state: FSMContext):
             model="llama-3.3-70b-versatile",
         )
         ai_response = completion.choices[0].message.content
+        
         await message.answer(f"✍️ <i>You said: {user_text}</i>\n\n💬 <b>AI:</b> {ai_response}", parse_mode="HTML")
-        await send_examiner_voice(message, ai_response, voice="en-US-EmmaNeural")
+        await send_examiner_voice(message, ai_response, voice=ai_voice)
         
         history.append({"role": "assistant", "content": ai_response})
         await state.update_data(practice_history=history)
@@ -178,7 +230,7 @@ async def stop_practice_cmd(message: types.Message, state: FSMContext):
 async def stop_practice_callback(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.answer()
-    await callback.message.answer("🏁 Erkin suhbat yakunlandi. Rahmat!")
+    await callback.message.edit_text("🏁 Erkin suhbat bekor qilindi.")
 
 # ==================== IELTS SPEAKING MOCK EXAM ====================
 
@@ -432,4 +484,4 @@ def main():
     web.run_app(app, host="0.0.0.0", port=PORT)
 
 if __name__ == "__main__":
-    main()
+    main()    
