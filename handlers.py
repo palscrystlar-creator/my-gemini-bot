@@ -2,7 +2,9 @@ from aiogram import Router, F, types
 from aiogram.filters import CommandStart
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from groq import Groq
-
+from aiogram import F
+import speech_recognition as sr # Audio uchun
+import os
 router = Router()
 ai_client = Groq(api_key="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")
 
