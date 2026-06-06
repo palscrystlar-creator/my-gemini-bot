@@ -255,23 +255,35 @@ async def p3_q2_handler(message: types.Message, state: FSMContext):
 @dp.message(IELTSMockState.part3_q3, F.voice)
 async def p3_q3_handler(message: types.Message, state: FSMContext):
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    await message.answer("🏁 <i>Test tugadi! Tahlil qilinmoqda...</i>")
+    await message.answer("🏁 <i>Test tugadi! Natijalar hisoblanmoqda...</i>", parse_mode="HTML")
+    
     text = await transcribe_voice(message)
-    if not text: return
     data = await state.get_data()
-    history = data.get("history")
-    history.append({"role": "examiner", "content": data.get("p3_q3")})
+    history = data.get("history", [])
     history.append({"role": "candidate", "content": text})
+    
+    # AI dan aniq ballarni talab qilamiz
+    report_prompt = (
+        "Analyze this IELTS Speaking interview. Provide the result in this format:\n\n"
+        "🏆 <b>Overall Band Score: [0.0-9.0]</b>\n"
+        "---------------------------\n"
+        "✅ <b>Fluency and Coherence:</b> [Score] - [Reason]\n"
+        "✅ <b>Lexical Resource:</b> [Score] - [Reason]\n"
+        "✅ <b>Grammatical Range:</b> [Score] - [Reason]\n"
+        "✅ <b>Pronunciation:</b> [Score] - [Reason]\n\n"
+        "💡 <b>Tips for improvement:</b> [Short advice]\n\n"
+        f"Interview Data: {history}"
+    )
+    
     try:
-        report_prompt = f"Analyze this IELTS interview: {history}. Provide a detailed report in Uzbek with sections: Score, Fluency, Lexical, Grammar, Tips. Use '---' as a divider."
         completion = ai_client.chat.completions.create(
             messages=[{"role": "user", "content": report_prompt}],
             model="llama-3.3-70b-versatile",
         )
-        sections = completion.choices[0].message.content.split("---")
-        for section in sections:
-            if section.strip():
-                await message.answer(section.strip())
+        report = completion.choices[0].message.content
+        await message.answer(report, parse_mode="HTML")
+    except Exception as e:
+        await message.answer("Natijalarni shakllantirishda xatolik yuz berdi.")
     finally:
         await state.clear()
 
