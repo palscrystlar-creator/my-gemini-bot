@@ -75,43 +75,37 @@ async def start_command(message: types.Message):
 async def start_ielts_mock(message: types.Message, state: FSMContext):
     await state.clear()
     
-    # Yangi savolni tasodifiy tanlash uchun promptni o'zgartiramiz
+    # IELTS Speaking Part 1 uchun professional prompt
+    prompt = (
+        "You are an official IELTS Speaking Examiner. "
+        "Ask a random, engaging Part 1 question. "
+        "Rules: Ask only ONE question. Do not introduce yourself. "
+        "Ensure the question is natural and common in IELTS."
+    )
+    
     try:
         completion = ai_client.chat.completions.create(
             messages=[
                 {"role": "system", "content": EXAMINER_PROMPT},
-                {"role": "user", "content": "Generate a unique IELTS Speaking Part 1 introduction question. Make it different every time."}
+                {"role": "user", "content": prompt}
             ],
             model="llama-3.3-70b-versatile",
         )
         q1 = completion.choices[0].message.content
         
-        await message.answer("🎬 <b>Welcome to the Full IELTS Speaking Mock Test!</b>", parse_mode="HTML")
-        await message.answer(f"🗣 <b>Part 1 - Question 1:</b>\n{q1}", parse_mode="HTML")
+        # Javobni chiroyli ko'rinishda yuborish
+        await message.answer("🎬 <b>IELTS Speaking Test Started!</b>\n\n"
+                             "<i>Please respond with a VOICE MESSAGE only.</i>", parse_mode="HTML")
+        await message.answer(f"🗣 <b>Examiner:</b> {q1}", parse_mode="HTML")
+        
+        # Ovozli xabarni yuborish
         await send_examiner_voice(message, q1)
         
-        await state.set_state(IELTSMockState.part1_q1)
-        # History ni bo'sh qilib yaratamiz
         await state.update_data(p1_q1=q1, history=[])
+        await state.set_state(IELTSMockState.part1_q1)
+        
     except Exception as e:
-        await message.answer(f"Xatolik: {str(e)}")
-
-async def transcribe_voice(message: types.Message) -> str:
-    voice_id = message.voice.file_id
-    file = await bot.get_file(voice_id)
-    local_voice_path = f"{voice_id}.ogg"
-    await bot.download_file(file.file_path, local_voice_path)
-    try:
-        with open(local_voice_path, "rb") as audio_file:
-            transcription = ai_client.audio.transcriptions.create(
-                file=(local_voice_path, audio_file.read()),
-                model="whisper-large-v3",
-            )
-        return transcription.text
-    except:
-        return ""
-    finally:
-        if os.path.exists(local_voice_path): os.remove(local_voice_path)
+        await message.answer(f"Xatolik yuz berdi: {str(e)}")
 @dp.message(F.voice)
 async def handle_normal_voice(message: types.Message):
     await bot.send_chat_action(chat_id=message.chat.id, action="record_voice")
