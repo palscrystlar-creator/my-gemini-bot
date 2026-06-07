@@ -14,7 +14,12 @@ def get_main_menu():
 
 @router.message(CommandStart())
 async def start_cmd(message: types.Message):
-    await message.answer("Assalomu alaykum!", reply_markup=get_main_menu())
+    # Menyuni aniq yuborish
+    await message.answer(
+        "<b>Assalomu alaykum!</b> 👋\nQuyidagi tugmalardan birini tanlang:", 
+        reply_markup=get_main_menu(), 
+        parse_mode="HTML"
+    )
 
 @router.message(Command("help"))
 async def help_cmd(message: types.Message):
