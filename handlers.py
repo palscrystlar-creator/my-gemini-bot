@@ -12,9 +12,9 @@ ai_client = Groq(api_key="gsk_0syuu6iyjwRVizbiteqLWGdyb3FY8tq9Ei3yfUmypwuhPZpFju
 def get_main_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📱 Mini Ekranni Ochish", web_app=types.WebAppInfo(url="https://google.com"))], # O'zingizning saytingiz linkini qo'ying
-        [InlineKeyboardButton(text="🧮 Matematika", callback_data="start_math")]
-@router.callback_query(F.data == "start_webapp")
-async def webapp_cb(callback: types.CallbackQuery):
+        [InlineKeyboardButton(text="🧮 Matematika", callback_data="start_math")]                                                      
+ @router.callback_query(F.data == "start_webapp")
+ async def webapp_cb(callback: types.CallbackQuery):
     # Bu yerda o'z sahifangiz manzilini yozasiz (Render yoki GitHub Pages linki)
     web_app_url = "https://sizning-saytingiz-nomi.onrender.com/index.html"
     
