@@ -39,3 +39,15 @@ async def webapp_cb(callback: types.CallbackQuery):
 async def chat_with_ai(message: types.Message):
     await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
     # AI kodi shu yerda davom etadi...
+@router.message(F.content_type == "web_app_data")
+async def handle_webapp_data(message: types.Message):
+    data = json.loads(message.web_app_data.data)
+    user_text = data['text']
+    
+    # AIga uzatish
+    await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    comp = ai_client.chat.completions.create(
+        messages=[{"role": "user", "content": user_text}],
+        model="llama-3.3-70b-versatile"
+    )
+    await message.answer(f"Siz dedingiz: {user_text}\n\nAI javobi: {comp.choices[0].message.content}")
