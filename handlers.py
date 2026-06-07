@@ -11,7 +11,6 @@ ai_client = Groq(api_key="gsk_0syuu6iyjwRVizbiteqLWGdyb3FY8tq9Ei3yfUmypwuhPZpFju
 def get_main_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📱 Mini Ekranni Ochish", web_app=types.WebAppInfo(url="https://google.com"))], # O'zingizning saytingiz linkini qo'ying
-        [InlineKeyboardButton(text="📖 Ovozli hikoya", callback_data="start_story")],
         [InlineKeyboardButton(text="🧮 Matematika", callback_data="start_math")]
     ])
 @router.message(CommandStart())
