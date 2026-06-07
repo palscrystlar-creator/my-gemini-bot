@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f0f2f5; padding: 20px; }
+        h1 { color: #333; }
+        button { padding: 15px 30px; background: #0088cc; color: white; border: none; border-radius: 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Salom, Telegram! 🚀</h1>
+    <p>Bu bot ichidagi veb-sahifa.</p>
+    <button onclick="closeApp()">Yopish</button>
+
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+        let tg = window.Telegram.WebApp;
+        tg.expand(); // Oynani to'liq ekranga yoyish
+        function closeApp() { tg.close(); }
+    </script>
+</body>
+</html>
