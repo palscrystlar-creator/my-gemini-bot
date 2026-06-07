@@ -16,7 +16,7 @@ def get_main_menu():
     ])
 @router.message(CommandStart())
 async def start_cmd(message: types.Message):
-    text = "<b>Assalomu alaykum!</b> 👋 Men sizning yordamchingizman. Kerakli bo'limni tanlang:"
+    text = "<b>Assalomu alaykum!Men AI yordamchingizman</b> 👋 Men sizning yordamchingizman. Kerakli bo'limni tanlang:"
     await message.answer(text, reply_markup=get_main_menu(), parse_mode="HTML")
 
 @router.callback_query(F.data == "start_story")
