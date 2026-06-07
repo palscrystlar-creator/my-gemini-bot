@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <button id="start-btn">🎙️ Ovozli suhbatni boshlash</button>
+    <p id="status"></p>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+        const tg = window.Telegram.WebApp;
+        const btn = document.getElementById('start-btn');
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        
+        recognition.lang = 'uz-UZ'; // O'zbek tilini tushunadi
+        
+        btn.onclick = () => recognition.start();
+        
+        recognition.onresult = (event) => {
+            const text = event.results[0][0].transcript;
+            // Matnni botga "main_data" sifatida yuborish
+            tg.sendData(JSON.stringify({text: text}));
+            tg.close();
+        };
+    </script>
+</body>
+</html>
