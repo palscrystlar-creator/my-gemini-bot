@@ -72,10 +72,9 @@ from aiogram.filters import Command
 async def help_cmd(message: types.Message):
     text = (
         "<b>Bot yordami:</b>\n\n"
-        "1. 📖 <b>Hikoya:</b> /story [mavzu] yozing.\n"
-        "2. 🧮 <b>Matematika:</b> Misolni yozing (masalan, 10*5).\n"
-        "3. 💬 <b>Suhbat:</b> Shunchaki xabar yozing, javob beraman.\n"
-        "4. 📱 <b>Web App:</b> Tugmalardan foydalaning."
+        "1. 🧮 <b>Matematika:</b> Misolni yozing (masalan, 10*5).\n"
+        "2. 💬 <b>Suhbat:</b> Shunchaki xabar yozing, javob beraman.\n"
+        "3. 📱 <b>Web App:</b> Tugmalardan foydalaning."
     )
     await message.answer(text, parse_mode="HTML")
 
