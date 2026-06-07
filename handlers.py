@@ -5,6 +5,7 @@ from groq import Groq
 from aiogram import F
 import speech_recognition as sr # Audio uchun
 import os
+from aiogram.filters import Command
 router = Router()
 ai_client = Groq(api_key="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")
 
@@ -65,3 +66,26 @@ async def handle_voice(message: types.Message):
         model="llama-3.3-70b-versatile"
     )
     await message.answer(comp.choices[0].message.content)
+from aiogram.filters import Command
+
+@router.message(Command("help"))
+async def help_cmd(message: types.Message):
+    text = (
+        "<b>Bot yordami:</b>\n\n"
+        "1. 📖 <b>Hikoya:</b> /story [mavzu] yozing.\n"
+        "2. 🧮 <b>Matematika:</b> Misolni yozing (masalan, 10*5).\n"
+        "3. 💬 <b>Suhbat:</b> Shunchaki xabar yozing, javob beraman.\n"
+        "4. 📱 <b>Web App:</b> Tugmalardan foydalaning."
+    )
+    await message.answer(text, parse_mode="HTML")
+
+@router.message(Command("profile"))
+async def profile_cmd(message: types.Message):
+    user = message.from_user
+    text = (
+        "👤 <b>Sizning profilingiz:</b>\n\n"
+        f"Ismingiz: {user.first_name}\n"
+        f"ID: <code>{user.id}</code>\n"
+        "Bot xizmatidan foydalanyapsiz!"
+    )
+    await message.answer(text, parse_mode="HTML")
